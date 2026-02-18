@@ -43,6 +43,7 @@ $user_id          = $input['user_id'] ?? '';
 $custom_timestamp = (int)($input['custom_timestamp'] ?? time());
 $match_title      = $input['match_title'] ?? $group_name;
 $force_update     = $input['force_update'] ?? false;
+$share_code_input = strtoupper(trim($input['share_code'] ?? ''));
 
 if (!$group_name || empty($matches) || !$user_id) {
     echo json_encode(['status' => 'error', 'message' => 'Missing group_name, matches, or user_id']);
@@ -227,6 +228,18 @@ foreach ($playerKeys as $pk) {
     $stmt2->execute();
     $stmt2->close();
     $conn2->close();
+}
+
+// ── 7. Mark collab session as finished (if collaborative) ────────
+if ($share_code_input) {
+    $conn3 = getDBConnection();
+    $stmt3 = $conn3->prepare(
+        "UPDATE collab_sessions SET status = 'finished' WHERE share_code = ? AND status = 'active'"
+    );
+    $stmt3->bind_param('s', $share_code_input);
+    $stmt3->execute();
+    $stmt3->close();
+    $conn3->close();
 }
 
 echo json_encode([

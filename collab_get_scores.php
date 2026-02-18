@@ -18,9 +18,9 @@ if (!$share_code) {
     exit;
 }
 
-// Find active session
+// Find active or finished session
 $session = dbGetRow(
-    "SELECT id FROM collab_sessions WHERE share_code = ? AND status = 'active'",
+    "SELECT id, status, group_name FROM collab_sessions WHERE share_code = ? AND status IN ('active', 'finished')",
     [$share_code]
 );
 
@@ -88,10 +88,14 @@ foreach ($updates as $u) {
     if ((int)$u['ts'] > $latestTs) $latestTs = (int)$u['ts'];
 }
 
+$sessionStatus = $session['status']; // 'active' or 'finished'
+
 echo json_encode([
     'status' => 'success',
+    'session_status' => $sessionStatus,
+    'group_name' => $session['group_name'],
     'updates' => $updates,
     'connected_users' => (int)($connected['cnt'] ?? 0),
     'latest_timestamp' => $latestTs > 0 ? $latestTs * 1000 : $since,
-    'session_active' => true
+    'session_active' => ($sessionStatus === 'active')
 ]);

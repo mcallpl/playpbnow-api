@@ -44,10 +44,25 @@ dbQuery("UPDATE verification_codes SET is_used = TRUE WHERE id = ?", [$verificat
 $user = dbGetRow("SELECT * FROM users WHERE phone = ?", [$clean_phone]);
 
 if (!$user) {
+    // Create new user with 30-day PRO trial
+    $trial_end = date('Y-m-d H:i:s', strtotime('+30 days'));
+    $now_str = date('Y-m-d H:i:s');
+
     $user_id = dbInsert(
-        "INSERT INTO users (phone, is_active, last_login_at) VALUES (?, TRUE, NOW())",
-        [$clean_phone]
+        "INSERT INTO users (phone, is_active, last_login_at, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, TRUE, NOW(), 'trial', 'pro', ?, ?)",
+        [$clean_phone, $now_str, $trial_end]
     );
+
+    // Create feature_access row with full Pro access for trial
+    try {
+        dbQuery(
+            "INSERT INTO feature_access (user_id, can_create_matches, can_edit_matches, can_delete_matches, can_generate_reports, can_create_groups, max_groups, max_collab_sessions, max_players_per_group) VALUES (?, 1, 1, 1, 1, 1, 999, 999, 999)",
+            [$user_id]
+        );
+    } catch (Exception $e) {
+        error_log("verify_code: could not create feature_access (table may not exist): " . $e->getMessage());
+    }
+
     $user = dbGetRow("SELECT * FROM users WHERE id = ?", [$user_id]);
 } else {
     dbQuery("UPDATE users SET last_login_at = NOW() WHERE id = ?", [$user['id']]);

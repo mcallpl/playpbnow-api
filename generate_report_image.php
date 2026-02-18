@@ -3,12 +3,21 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
+require_once __DIR__ . '/db_config.php';
+
 // 1. INPUT
 $input = json_decode(file_get_contents('php://input'), true);
 $schedule = $input['schedule'] ?? [];
 $group_name = $input['group_name'] ?? 'Pickleball Group';
 $date_str = $input['date_str'] ?? date('F j, Y');
 $court_name = $input['court_name'] ?? '';
+$user_id = $input['user_id'] ?? null;
+
+// Check if user has pro access (clean reports)
+$is_pro = false;
+if ($user_id) {
+    $is_pro = userHasActiveSubscription($user_id);
+}
 
 if (empty($schedule)) {
     echo json_encode(['status' => 'error', 'message' => 'No schedule data']);
@@ -211,6 +220,40 @@ foreach ($schedule as $idx => $round) {
     }
 
     $y_cur += $row_height;
+}
+
+// WATERMARK FOR FREE TIER
+if (!$is_pro) {
+    // Enable alpha blending for transparency
+    imagealphablending($im, true);
+
+    // 1. Diagonal watermark text repeated across the image
+    $wm_color = imagecolorallocatealpha($im, 180, 180, 180, 80); // Light gray, ~70% transparent
+    if ($use_ttf) {
+        $wm_text = "PlayPBNow PRO";
+        $wm_size = 36;
+        // Tile the watermark diagonally across the entire image
+        for ($wy = -100; $wy < $img_height + 100; $wy += 160) {
+            for ($wx = -200; $wx < $img_width + 200; $wx += 400) {
+                imagettftext($im, $wm_size, 35, $wx, $wy, $wm_color, $font_file, $wm_text);
+            }
+        }
+    }
+
+    // 2. Bottom banner with upgrade CTA
+    $banner_h = 48;
+    $banner_y = $img_height - $banner_h;
+    $banner_bg = imagecolorallocatealpha($im, 27, 51, 88, 30); // Dark blue, semi-transparent
+    imagefilledrectangle($im, 0, $banner_y, $img_width, $img_height, $banner_bg);
+
+    $banner_text_color = imagecolorallocate($im, 255, 255, 255);
+    $banner_msg = "Upgrade to PlayPBNow Pro for clean reports";
+    if ($use_ttf) {
+        drawCenteredText($im, $font_file, 14, 0, $banner_y, $img_width, $img_height, $banner_text_color, $banner_msg);
+    } else {
+        $mid_x = ($img_width / 2) - (strlen($banner_msg) * 4);
+        imagestring($im, 4, intval($mid_x), $banner_y + 15, $banner_msg, $banner_text_color);
+    }
 }
 
 // SAVE

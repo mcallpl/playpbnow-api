@@ -125,10 +125,11 @@ if ($existingSession) {
 
 // ── 4. Create new session if not updating ────────────────────
 if (!$existingSession || !$force_update) {
+    $unique_batch_id = $group_id . '_' . time();
     $sessionId = dbInsert(
         "INSERT INTO sessions (group_id, batch_id, title, device_id, user_id, session_date, scores_hash, created_at, player_count, male_count, female_count)
          VALUES (?, ?, ?, '', ?, ?, ?, NOW(), 0, 0, 0)",
-        [$groupDbId, $group_id, $match_title, $user_id, $sessionDate, $scoresHash]
+        [$groupDbId, $unique_batch_id, $match_title, $user_id, $sessionDate, $scoresHash]
     );
     
     if (!$sessionId) {

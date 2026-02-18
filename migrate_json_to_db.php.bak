@@ -1,0 +1,223 @@
+<?php
+// ============================================
+// JSON to MySQL Migration Script
+// Run this ONCE to migrate existing data
+// ============================================
+
+// Enable error display
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Set content type to HTML for browser viewing
+header('Content-Type: text/html; charset=utf-8');
+
+echo "<!DOCTYPE html><html><head><title>Migration Script</title>";
+echo "<style>body{font-family:monospace;padding:20px;background:#1a1a1a;color:#0f0;}";
+echo ".success{color:#0f0;} .error{color:#f00;} .info{color:#ff0;}</style></head><body>";
+
+echo "<h1>PlayPBNow Migration Script</h1>\n";
+echo "<pre>\n";
+
+// Check if db_config exists
+if (!file_exists(__DIR__ . '/db_config.php')) {
+    echo "<span class='error'>❌ ERROR: db_config.php not found!</span>\n";
+    echo "Make sure db_config.php is in the same directory as this script.\n";
+    echo "Current directory: " . __DIR__ . "\n";
+    exit;
+}
+
+require_once __DIR__ . '/db_config.php';
+
+// Load existing JSON data
+$jsonFile = __DIR__ . '/pickleball_data.json';
+echo "<span class='info'>Looking for JSON file at: $jsonFile</span>\n";
+
+if (!file_exists($jsonFile)) {
+    echo "<span class='error'>❌ ERROR: pickleball_data.json not found!</span>\n";
+    echo "Please make sure pickleball_data.json is in: " . __DIR__ . "\n";
+    echo "\nFiles in this directory:\n";
+    $files = scandir(__DIR__);
+    foreach ($files as $file) {
+        if ($file !== '.' && $file !== '..') {
+            echo "  - $file\n";
+        }
+    }
+    exit;
+}
+
+echo "<span class='success'>✓ Found JSON file</span>\n";
+
+$jsonContent = file_get_contents($jsonFile);
+$jsonData = json_decode($jsonContent, true);
+
+if (!$jsonData) {
+    echo "<span class='error'>❌ ERROR: Could not parse JSON data</span>\n";
+    echo "JSON Error: " . json_last_error_msg() . "\n";
+    exit;
+}
+
+echo "<span class='success'>✓ JSON parsed successfully</span>\n";
+echo "<span class='info'>Found " . count($jsonData) . " groups in JSON</span>\n\n";
+
+// Test database connection
+try {
+    $conn = getDBConnection();
+    echo "<span class='success'>✓ Database connected successfully</span>\n\n";
+} catch (Exception $e) {
+    echo "<span class='error'>❌ Database connection failed!</span>\n";
+    echo "Error: " . $e->getMessage() . "\n";
+    exit;
+}
+
+echo "Starting migration...\n";
+echo str_repeat("=", 60) . "\n\n";
+
+try {
+    $groupCount = 0;
+    $playerCount = 0;
+    $matchCount = 0;
+    $sessionCount = 0;
+    
+    // Process each group in JSON
+    foreach ($jsonData as $groupKey => $groupData) {
+        if ($groupKey === "Unknown Group") continue;
+        
+        echo "<span class='info'>Processing group: $groupKey</span>\n";
+        
+        $groupName = $groupData['meta']['name'] ?? $groupKey;
+        
+        $defaultDeviceId = 'migrated_' . substr(md5($groupKey), 0, 10);
+        if (!empty($groupData['history']) && isset($groupData['history'][0]['device_id'])) {
+            $defaultDeviceId = $groupData['history'][0]['device_id'];
+        }
+        
+        // Get or create user
+        $user = getOrCreateUser($defaultDeviceId);
+        echo "  <span class='success'>✓ User ID: {$user['id']}</span>\n";
+        
+        // Insert group
+        $groupId = dbInsert(
+            "INSERT INTO `groups` (group_key, name, creator_user_id, device_id) 
+             VALUES (?, ?, ?, ?)",
+            [$groupKey, $groupName, $user['id'], $defaultDeviceId]
+        );
+        $groupCount++;
+        echo "  <span class='success'>✓ Group ID: $groupId</span>\n";
+        
+        // Insert players
+        if (!empty($groupData['roster'])) {
+            foreach ($groupData['roster'] as $player) {
+                $playerId = $player['id'] ?? null;
+                $firstName = $player['name'] ?? 'Unknown';
+                
+                if (!$playerId) continue;
+                
+                dbInsert(
+                    "INSERT INTO players (group_id, player_key, first_name, last_name, device_id) 
+                     VALUES (?, ?, ?, '', ?)",
+                    [$groupId, $playerId, $firstName, $defaultDeviceId]
+                );
+                $playerCount++;
+            }
+            echo "  <span class='success'>✓ Imported " . count($groupData['roster']) . " players</span>\n";
+        }
+        
+        // Collect sessions
+        $sessions = [];
+        if (!empty($groupData['history'])) {
+            foreach ($groupData['history'] as $match) {
+                $batchId = $match['batch_id'] ?? null;
+                if ($batchId && !isset($sessions[$batchId])) {
+                    $sessions[$batchId] = [
+                        'title' => $match['match_title'] ?? $groupName,
+                        'timestamp' => $match['timestamp'] ?? time(),
+                        'device_id' => $match['device_id'] ?? $defaultDeviceId
+                    ];
+                }
+            }
+        }
+        
+        // Insert sessions
+        $sessionMap = [];
+        foreach ($sessions as $batchId => $sessionData) {
+            $sessionId = dbInsert(
+                "INSERT INTO sessions (group_id, batch_id, title, device_id, session_date) 
+                 VALUES (?, ?, ?, ?, FROM_UNIXTIME(?))",
+                [
+                    $groupId, 
+                    $batchId, 
+                    $sessionData['title'], 
+                    $sessionData['device_id'],
+                    $sessionData['timestamp']
+                ]
+            );
+            $sessionMap[$batchId] = $sessionId;
+            $sessionCount++;
+        }
+        if (count($sessions) > 0) {
+            echo "  <span class='success'>✓ Created " . count($sessions) . " sessions</span>\n";
+        }
+        
+        // Insert matches
+        if (!empty($groupData['history'])) {
+            foreach ($groupData['history'] as $match) {
+                $batchId = $match['batch_id'] ?? null;
+                $sessionId = $sessionMap[$batchId] ?? null;
+                $timestamp = $match['timestamp'] ?? time();
+                $deviceId = $match['device_id'] ?? $defaultDeviceId;
+                
+                dbInsert(
+                    "INSERT INTO matches 
+                     (group_id, session_id, batch_id, 
+                      p1_key, p2_key, p3_key, p4_key,
+                      p1_name, p2_name, p3_name, p4_name,
+                      s1, s2, timestamp, match_date, device_id, match_title) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?)",
+                    [
+                        $groupId,
+                        $sessionId,
+                        $batchId,
+                        $match['p1'] ?? '',
+                        $match['p2'] ?? '',
+                        $match['p3'] ?? '',
+                        $match['p4'] ?? '',
+                        $match['p1_name'] ?? 'Unknown',
+                        $match['p2_name'] ?? 'Unknown',
+                        $match['p3_name'] ?? 'Unknown',
+                        $match['p4_name'] ?? 'Unknown',
+                        $match['s1'] ?? 0,
+                        $match['s2'] ?? 0,
+                        $timestamp,
+                        $timestamp,
+                        $deviceId,
+                        $match['match_title'] ?? null
+                    ]
+                );
+                $matchCount++;
+            }
+            echo "  <span class='success'>✓ Imported " . count($groupData['history']) . " matches</span>\n";
+        }
+        
+        echo "\n";
+        flush(); // Show progress in real-time
+    }
+    
+    echo "\n" . str_repeat("=", 60) . "\n";
+    echo "<span class='success'>✅ Migration completed successfully!</span>\n\n";
+    echo "Summary:\n";
+    echo "  - Groups: $groupCount\n";
+    echo "  - Players: $playerCount\n";
+    echo "  - Sessions: $sessionCount\n";
+    echo "  - Matches: $matchCount\n";
+    echo "\n";
+    echo "<span class='info'>IMPORTANT: Backup your pickleball_data.json file before deleting it!</span>\n";
+    
+} catch (Exception $e) {
+    echo "<span class='error'>❌ Migration failed!</span>\n";
+    echo "Error: " . $e->getMessage() . "\n";
+    echo "Trace: " . $e->getTraceAsString() . "\n";
+}
+
+echo "</pre></body></html>";
+?>

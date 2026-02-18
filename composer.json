@@ -1,0 +1,9 @@
+{
+    "name": "mcallpl/playpbnow-api",
+    "description": "PlayPBNow Pickleball App - PHP Backend API",
+    "require": {
+        "php": ">=7.1.0",
+        "twilio/sdk": "^8.4",
+        "stripe/stripe-php": "*"
+    }
+}

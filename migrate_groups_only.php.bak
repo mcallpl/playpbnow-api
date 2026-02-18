@@ -1,0 +1,109 @@
+<?php
+// ============================================
+// Migrate Groups from JSON to Database
+// This creates groups in the database without matches
+// ============================================
+
+header('Content-Type: text/html; charset=utf-8');
+date_default_timezone_set('America/Los_Angeles');
+
+echo "<h1>Group Migration</h1>";
+echo "<pre>";
+
+require_once __DIR__ . '/db_config.php';
+
+// Load JSON
+$jsonFile = __DIR__ . '/pickleball_data.json';
+if (!file_exists($jsonFile)) {
+    echo "❌ ERROR: pickleball_data.json not found\n";
+    exit;
+}
+
+$jsonData = json_decode(file_get_contents($jsonFile), true);
+if (!$jsonData) {
+    echo "❌ ERROR: Could not parse JSON\n";
+    exit;
+}
+
+echo "Found " . count($jsonData) . " groups in JSON\n\n";
+
+$created = 0;
+$skipped = 0;
+
+foreach ($jsonData as $groupKey => $groupData) {
+    if ($groupKey === "Unknown Group") {
+        echo "⊗ Skipping 'Unknown Group'\n";
+        continue;
+    }
+    
+    $groupName = $groupData['meta']['name'] ?? $groupKey;
+    
+    // Get device_id from first match if available
+    $deviceId = 'migrated_' . substr(md5($groupKey), 0, 10);
+    if (!empty($groupData['history']) && isset($groupData['history'][0]['device_id'])) {
+        $deviceId = $groupData['history'][0]['device_id'];
+    }
+    
+    echo "Processing: $groupName (key: $groupKey)\n";
+    
+    // Check if group already exists
+    $existing = dbGetRow(
+        "SELECT id FROM `groups` WHERE group_key = ?",
+        [$groupKey]
+    );
+    
+    if ($existing) {
+        echo "  ⊗ Already exists (ID: {$existing['id']})\n";
+        $skipped++;
+        continue;
+    }
+    
+    // Get or create user
+    $user = getOrCreateUser($deviceId);
+    echo "  User ID: {$user['id']}\n";
+    
+    // Create group
+    $groupId = dbInsert(
+        "INSERT INTO `groups` (group_key, name, creator_user_id, device_id) 
+         VALUES (?, ?, ?, ?)",
+        [$groupKey, $groupName, $user['id'], $deviceId]
+    );
+    
+    if ($groupId) {
+        echo "  ✓ Created group ID: $groupId\n";
+        
+        // Also create players from roster
+        if (!empty($groupData['roster'])) {
+            $playerCount = 0;
+            foreach ($groupData['roster'] as $player) {
+                $playerId = $player['id'] ?? null;
+                $playerName = $player['name'] ?? 'Unknown';
+                
+                if (!$playerId) continue;
+                
+                dbInsert(
+                    "INSERT INTO players (group_id, player_key, first_name, device_id) 
+                     VALUES (?, ?, ?, ?)",
+                    [$groupId, $playerId, $playerName, $deviceId]
+                );
+                $playerCount++;
+            }
+            echo "  ✓ Added $playerCount players\n";
+        }
+        
+        $created++;
+    } else {
+        echo "  ✗ FAILED to create group\n";
+    }
+    
+    echo "\n";
+}
+
+echo "========================================\n";
+echo "✓ Migration Complete!\n";
+echo "  Created: $created groups\n";
+echo "  Skipped: $skipped groups (already existed)\n";
+echo "========================================\n";
+
+echo "</pre>";
+?>

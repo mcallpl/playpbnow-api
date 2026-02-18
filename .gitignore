@@ -1,0 +1,24 @@
+# Dependencies - installed via Composer
+/vendor/
+/Twilio/
+
+# Composer lock file
+composer.lock
+
+# Environment & config files with secrets
+.env
+db_config.php
+
+# Log files
+*.log
+save_debug.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo

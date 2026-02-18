@@ -8,6 +8,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 $schedule = $input['schedule'] ?? [];
 $group_name = $input['group_name'] ?? 'Pickleball Group';
 $date_str = $input['date_str'] ?? date('F j, Y');
+$court_name = $input['court_name'] ?? '';
 
 if (empty($schedule)) {
     echo json_encode(['status' => 'error', 'message' => 'No schedule data']);
@@ -112,8 +113,12 @@ $final_font_size = min(28, $global_font_size);
 // --- DRAWING ---
 
 // Header
-drawCenteredText($im, $font_file, 40, 0, 20, $img_width, 100, $black, "Play PB Now!");
-drawCenteredText($im, $font_file, 18, 0, 100, $img_width, 150, $black, "$group_name ($date_str)");
+drawCenteredText($im, $font_file, 40, 0, 10, $img_width, 80, $black, "Play PB Now!");
+drawCenteredText($im, $font_file, 18, 0, 80, $img_width, 120, $black, "$group_name ($date_str)");
+if ($court_name) {
+    $court_color = imagecolorallocate($im, 80, 80, 80);
+    drawCenteredText($im, $font_file, 16, 0, 118, $img_width, 158, $court_color, $court_name);
+}
 
 // Table Header
 $y_cur = $header_height;

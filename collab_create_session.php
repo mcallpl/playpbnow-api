@@ -42,9 +42,9 @@ if (!$batch_id || !$group_name) {
     exit;
 }
 
-// ── 1. Generate unique 6-character alphanumeric code ──────────
+// ── 1. Generate unique 6-character alphabetic code ──────────
 function generateShareCode() {
-    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     $code = '';
     for ($i = 0; $i < 6; $i++) {
         $code .= $chars[random_int(0, strlen($chars) - 1)];

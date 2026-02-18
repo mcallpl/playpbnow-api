@@ -40,7 +40,7 @@ if (!$group) {
 }
 
 // Generate unique share code
-$chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+$chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 $share_code = '';
 for ($attempt = 0; $attempt < 10; $attempt++) {
     $share_code = '';

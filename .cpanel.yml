@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/x2v8n84ca09w/public_html/Chipleball/api/
+    - /bin/cp -R * $DEPLOYPATH

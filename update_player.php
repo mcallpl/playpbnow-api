@@ -33,6 +33,18 @@ try {
     }
     
     if (!empty($cell_phone)) {
+        // Check if this phone is already used by a different player
+        $phoneOwner = dbGetRow(
+            "SELECT id, first_name FROM players WHERE cell_phone = ? AND id != ?",
+            [$cell_phone, $player_id]
+        );
+        if ($phoneOwner) {
+            echo json_encode([
+                'status' => 'error',
+                'message' => "This phone number is already assigned to {$phoneOwner['first_name']}. You may want to merge these players on the Players tab."
+            ]);
+            exit;
+        }
         $updates[] = "cell_phone = ?";
         $params[] = $cell_phone;
     } else {

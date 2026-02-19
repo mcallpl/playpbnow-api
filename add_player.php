@@ -19,6 +19,7 @@ $gender             = $input['gender'] ?? '';
 $player_key         = $input['player_key'] ?? 'pk_' . time() . '_' . rand(1000,9999);
 $cell_phone         = trim($input['cell_phone'] ?? '');
 $existing_player_id = $input['existing_player_id'] ?? null;
+$force_new           = $input['force_new'] ?? false;
 
 // Normalize phone: empty string → NULL
 if ($cell_phone === '') $cell_phone = null;
@@ -57,6 +58,26 @@ try {
             $player_id = (int)$byPhone['id'];
             $player_key = $byPhone['player_key'];
             goto add_membership;
+        }
+    }
+
+    // ── OPTION B2: Check for same name in this group ─────────
+    // Don't auto-merge — return the match so frontend can ask the user
+    if (!$force_new) {
+        $byName = dbGetAll(
+            "SELECT p.id, p.player_key, p.first_name, p.last_name, p.cell_phone, p.gender
+             FROM players p
+             INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
+             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?)) AND pgm.group_id = ?",
+            [$first_name, $group_id]
+        );
+        if (!empty($byName)) {
+            echo json_encode([
+                'status' => 'duplicate_name',
+                'message' => 'A player with this name already exists in the group',
+                'existing_players' => $byName
+            ]);
+            exit;
         }
     }
 

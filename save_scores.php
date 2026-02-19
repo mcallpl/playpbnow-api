@@ -232,12 +232,13 @@ foreach ($playerKeys as $pk) {
 }
 
 // ── 7. Mark collab session as finished (if collaborative) ────────
+// Store the saved session_id so collaborators can navigate to the correct leaderboard session
 if ($share_code_input) {
     $conn3 = getDBConnection();
     $stmt3 = $conn3->prepare(
-        "UPDATE collab_sessions SET status = 'finished' WHERE share_code = ? AND status = 'active'"
+        "UPDATE collab_sessions SET status = 'finished', saved_session_id = ? WHERE share_code = ? AND status = 'active'"
     );
-    $stmt3->bind_param('s', $share_code_input);
+    $stmt3->bind_param('is', $sessionId, $share_code_input);
     $stmt3->execute();
     $stmt3->close();
     $conn3->close();

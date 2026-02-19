@@ -20,7 +20,7 @@ if (!$share_code) {
 
 // Find active or finished session
 $session = dbGetRow(
-    "SELECT id, status, group_name FROM collab_sessions WHERE share_code = ? AND status IN ('active', 'finished')",
+    "SELECT id, status, group_name, saved_session_id FROM collab_sessions WHERE share_code = ? AND status IN ('active', 'finished')",
     [$share_code]
 );
 
@@ -94,6 +94,7 @@ echo json_encode([
     'status' => 'success',
     'session_status' => $sessionStatus,
     'group_name' => $session['group_name'],
+    'saved_session_id' => $session['saved_session_id'] ?? null,
     'updates' => $updates,
     'connected_users' => (int)($connected['cnt'] ?? 0),
     'latest_timestamp' => $latestTs > 0 ? $latestTs * 1000 : $since,

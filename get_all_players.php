@@ -12,15 +12,15 @@ if (empty($user_id)) {
 
 try {
     // Get ALL unique players for this user across ALL their groups
-    // Include group names for better duplicate identification
+    // Use player_group_memberships to find players in groups owned by this user
     $players = dbGetAll(
-        "SELECT DISTINCT p.*,
+        "SELECT p.*,
                 GROUP_CONCAT(DISTINCT g2.name ORDER BY g2.name SEPARATOR ', ') as group_names
          FROM players p
-         INNER JOIN `groups` g ON p.group_id = g.id
-         LEFT JOIN player_group_memberships pgm ON p.id = pgm.player_id
-         LEFT JOIN `groups` g2 ON pgm.group_id = g2.id
-         WHERE g.owner_user_id = ?
+         INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
+         INNER JOIN `groups` g ON pgm.group_id = g.id AND g.owner_user_id = ?
+         LEFT JOIN player_group_memberships pgm2 ON p.id = pgm2.player_id
+         LEFT JOIN `groups` g2 ON pgm2.group_id = g2.id
          GROUP BY p.id
          ORDER BY p.first_name ASC",
         [$user_id]

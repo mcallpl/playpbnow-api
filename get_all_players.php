@@ -15,7 +15,7 @@ try {
     // Include group names for better duplicate identification
     $players = dbGetAll(
         "SELECT DISTINCT p.*,
-                GROUP_CONCAT(DISTINCT g2.group_name ORDER BY g2.group_name SEPARATOR ', ') as group_names
+                GROUP_CONCAT(DISTINCT g2.name ORDER BY g2.name SEPARATOR ', ') as group_names
          FROM players p
          INNER JOIN `groups` g ON p.group_id = g.id
          LEFT JOIN player_group_memberships pgm ON p.id = pgm.player_id

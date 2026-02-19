@@ -61,23 +61,21 @@ try {
         }
     }
 
-    // ── OPTION B2: Check for same name in this group ─────────
-    // Don't auto-merge — return the match so frontend can ask the user
+    // ── OPTION B2: Check for same name GLOBALLY ─────────────
+    // If a player with this name already exists anywhere, reuse that record
+    // instead of creating a duplicate. Just add them to this group.
     if (!$force_new) {
         $byName = dbGetAll(
             "SELECT p.id, p.player_key, p.first_name, p.last_name, p.cell_phone, p.gender
              FROM players p
-             INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
-             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?)) AND pgm.group_id = ?",
-            [$first_name, $group_id]
+             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?))",
+            [$first_name]
         );
         if (!empty($byName)) {
-            echo json_encode([
-                'status' => 'duplicate_name',
-                'message' => 'A player with this name already exists in the group',
-                'existing_players' => $byName
-            ]);
-            exit;
+            // Reuse the first matching player — just add them to this group
+            $player_id = (int)$byName[0]['id'];
+            $player_key = $byName[0]['player_key'];
+            goto add_membership;
         }
     }
 

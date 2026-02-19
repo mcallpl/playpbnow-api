@@ -5,65 +5,416 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PlayPBNow - Privacy Policy</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6; }
-        h1 { color: #1b3358; border-bottom: 3px solid #87ca37; padding-bottom: 10px; }
-        h2 { color: #1b3358; margin-top: 30px; }
-        .updated { color: #666; font-style: italic; }
-        .contact { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f4f6f9;
+            color: #333;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            background: linear-gradient(135deg, #1b3358 0%, #2a4a6f 100%);
+            padding: 50px 20px 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #87ca37, #6db82a, #87ca37);
+        }
+
+        .header h1 {
+            color: #fff;
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .header h1 span {
+            color: #87ca37;
+        }
+
+        .header .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.05rem;
+            font-weight: 400;
+        }
+
+        .header .updated {
+            display: inline-block;
+            margin-top: 16px;
+            background: rgba(135, 202, 55, 0.15);
+            color: #87ca37;
+            padding: 5px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid rgba(135, 202, 55, 0.3);
+        }
+
+        /* ── INTRO ── */
+        .intro {
+            max-width: 780px;
+            margin: -20px auto 0;
+            padding: 30px 32px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(27, 51, 88, 0.08);
+            position: relative;
+            z-index: 2;
+            font-size: 1.05rem;
+            color: #555;
+            border-left: 4px solid #87ca37;
+        }
+
+        .intro strong {
+            color: #1b3358;
+        }
+
+        /* ── CONTAINER ── */
+        .container {
+            max-width: 780px;
+            margin: 0 auto;
+            padding: 20px 20px 40px;
+        }
+
+        /* ── SECTION CARDS ── */
+        .section {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-top: 20px;
+            box-shadow: 0 2px 12px rgba(27, 51, 88, 0.06);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .section:hover {
+            box-shadow: 0 4px 20px rgba(27, 51, 88, 0.1);
+        }
+
+        .section h2 {
+            font-size: 1.3rem;
+            color: #1b3358;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f0f2f5;
+        }
+
+        .section h2 .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        /* Color-coded section icons */
+        .icon-collect { background: #f0fae5; }
+        .icon-use { background: #e8f4fd; }
+        .icon-third { background: #fef5e7; }
+        .icon-security { background: #fde8e8; }
+        .icon-retention { background: #f3e8fd; }
+        .icon-children { background: #e8fdf0; }
+        .icon-changes { background: #fff3e0; }
+
+        .section h3 {
+            font-size: 1rem;
+            color: #2a4a6f;
+            margin: 18px 0 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.85rem;
+        }
+
+        .section p {
+            color: #555;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+
+        /* ── STYLED LIST ── */
+        .section ul {
+            list-style: none;
+            padding: 0;
+            margin: 8px 0 16px;
+        }
+
+        .section ul li {
+            padding: 8px 0 8px 28px;
+            position: relative;
+            color: #555;
+            font-size: 0.95rem;
+            border-bottom: 1px solid #f8f9fa;
+        }
+
+        .section ul li:last-child {
+            border-bottom: none;
+        }
+
+        .section ul li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 14px;
+            width: 8px;
+            height: 8px;
+            background: #87ca37;
+            border-radius: 50%;
+        }
+
+        .section ul li strong {
+            color: #1b3358;
+        }
+
+        /* ── HIGHLIGHT BOX ── */
+        .highlight-box {
+            background: #f0fae5;
+            border: 1px solid rgba(135, 202, 55, 0.3);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 12px 0;
+            font-size: 0.9rem;
+            color: #3a6b10;
+        }
+
+        .highlight-box strong {
+            color: #2a5a08;
+        }
+
+        /* ── LINK STYLES ── */
+        a {
+            color: #87ca37;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        a:hover {
+            color: #6db82a;
+            text-decoration: underline;
+        }
+
+        /* ── CONTACT CARD ── */
+        .contact-card {
+            background: linear-gradient(135deg, #1b3358 0%, #2a4a6f 100%);
+            border-radius: 12px;
+            padding: 32px;
+            margin-top: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .contact-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #87ca37;
+        }
+
+        .contact-card h2 {
+            color: #fff;
+            font-size: 1.3rem;
+            margin-bottom: 8px;
+            border: none;
+            padding: 0;
+            justify-content: center;
+        }
+
+        .contact-card p {
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 16px;
+            font-size: 0.95rem;
+        }
+
+        .contact-card .email-btn {
+            display: inline-block;
+            background: #87ca37;
+            color: #fff;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .contact-card .email-btn:hover {
+            background: #6db82a;
+            transform: translateY(-1px);
+            text-decoration: none;
+        }
+
+        /* ── FOOTER ── */
+        .footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: #999;
+            font-size: 0.85rem;
+        }
+
+        .footer span {
+            color: #87ca37;
+            font-weight: 600;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 600px) {
+            .header {
+                padding: 36px 16px 30px;
+            }
+
+            .header h1 {
+                font-size: 1.7rem;
+            }
+
+            .intro {
+                margin: -16px 12px 0;
+                padding: 22px 20px;
+                font-size: 0.95rem;
+            }
+
+            .container {
+                padding: 12px 12px 30px;
+            }
+
+            .section {
+                padding: 20px 20px;
+                border-radius: 10px;
+            }
+
+            .section h2 {
+                font-size: 1.15rem;
+            }
+
+            .contact-card {
+                padding: 24px 20px;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>PlayPBNow Privacy Policy</h1>
-    <p class="updated">Last Updated: February 18, 2026</p>
 
-    <p>PlayPBNow ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our mobile application.</p>
-
-    <h2>Information We Collect</h2>
-    <p><strong>Personal Information:</strong></p>
-    <ul>
-        <li>Phone number (used for SMS verification and account authentication)</li>
-        <li>Device identifier (used to associate your data with your device)</li>
-    </ul>
-    <p><strong>Usage Data:</strong></p>
-    <ul>
-        <li>Match scores and game results</li>
-        <li>Group membership and player rosters</li>
-        <li>Match history and statistics</li>
-    </ul>
-
-    <h2>How We Use Your Information</h2>
-    <p>We use the information we collect to:</p>
-    <ul>
-        <li>Verify your identity via SMS</li>
-        <li>Store and display your match data, groups, and player rosters</li>
-        <li>Generate match reports and leaderboards</li>
-        <li>Enable collaborative scoring between devices</li>
-    </ul>
-
-    <h2>Third-Party Services</h2>
-    <p>We use the following third-party services:</p>
-    <ul>
-        <li><strong>Twilio:</strong> For sending SMS verification codes. Twilio's privacy policy can be found at <a href="https://www.twilio.com/legal/privacy">https://www.twilio.com/legal/privacy</a></li>
-    </ul>
-
-    <h2>Data Storage and Security</h2>
-    <p>Your data is stored on secure servers and transmitted using HTTPS encryption. We do not sell, trade, or rent your personal information to third parties.</p>
-
-    <h2>Data Retention and Deletion</h2>
-    <p>You may request deletion of your account and associated data by contacting us at support@playpbnow.com. Upon request, we will delete your personal data within 30 days.</p>
-
-    <h2>Children's Privacy</h2>
-    <p>Our app is not directed to children under 13. We do not knowingly collect personal information from children under 13.</p>
-
-    <h2>Changes to This Policy</h2>
-    <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy within the app.</p>
-
-    <div class="contact">
-        <h2>Contact Us</h2>
-        <p>If you have questions about this Privacy Policy, please contact us at:</p>
-        <p>Email: <a href="mailto:support@playpbnow.com">support@playpbnow.com</a></p>
+    <!-- HEADER -->
+    <div class="header">
+        <h1>Play<span>PB</span>Now</h1>
+        <div class="subtitle">Privacy Policy</div>
+        <div class="updated">Last Updated: February 18, 2026</div>
     </div>
 
-    <p style="margin-top: 30px; color: #666;">&copy; 2026 PlayPBNow. All rights reserved.</p>
+    <!-- INTRO -->
+    <div class="intro">
+        <strong>PlayPBNow</strong> ("we", "our", "us") is committed to protecting your privacy. This Privacy Policy explains how we <strong>collect</strong>, <strong>use</strong>, and <strong>safeguard</strong> your information when you use our mobile application.
+    </div>
+
+    <div class="container">
+
+        <!-- INFORMATION WE COLLECT -->
+        <div class="section">
+            <h2><span class="icon icon-collect">&#128241;</span> Information We Collect</h2>
+
+            <h3>Personal Information</h3>
+            <ul>
+                <li><strong>Phone number</strong> &mdash; used for SMS verification and account authentication</li>
+                <li><strong>Device identifier</strong> &mdash; used to associate your data with your device</li>
+            </ul>
+
+            <h3>Usage Data</h3>
+            <ul>
+                <li><strong>Match scores</strong> and game results</li>
+                <li><strong>Group membership</strong> and player rosters</li>
+                <li><strong>Match history</strong> and statistics</li>
+            </ul>
+        </div>
+
+        <!-- HOW WE USE YOUR INFORMATION -->
+        <div class="section">
+            <h2><span class="icon icon-use">&#128736;</span> How We Use Your Information</h2>
+            <p>We use the information we collect to:</p>
+            <ul>
+                <li><strong>Verify your identity</strong> via SMS</li>
+                <li><strong>Store and display</strong> your match data, groups, and player rosters</li>
+                <li><strong>Generate match reports</strong> and leaderboards</li>
+                <li><strong>Enable collaborative scoring</strong> between devices</li>
+            </ul>
+        </div>
+
+        <!-- THIRD-PARTY SERVICES -->
+        <div class="section">
+            <h2><span class="icon icon-third">&#128279;</span> Third-Party Services</h2>
+            <p>We use the following third-party services:</p>
+            <ul>
+                <li><strong>Twilio</strong> &mdash; For sending SMS verification codes. Twilio's privacy policy can be found at <a href="https://www.twilio.com/legal/privacy" target="_blank" rel="noopener">twilio.com/legal/privacy</a></li>
+            </ul>
+        </div>
+
+        <!-- DATA STORAGE AND SECURITY -->
+        <div class="section">
+            <h2><span class="icon icon-security">&#128274;</span> Data Storage &amp; Security</h2>
+            <p>Your data is stored on <strong>secure servers</strong> and transmitted using <strong>HTTPS encryption</strong>. We do not sell, trade, or rent your personal information to third parties.</p>
+            <div class="highlight-box">
+                <strong>Our commitment:</strong> Your data is yours. We will never sell it, share it with advertisers, or use it for anything other than powering your PlayPBNow experience.
+            </div>
+        </div>
+
+        <!-- DATA RETENTION AND DELETION -->
+        <div class="section">
+            <h2><span class="icon icon-retention">&#128465;</span> Data Retention &amp; Deletion</h2>
+            <p>You may request <strong>deletion of your account</strong> and all associated data by contacting us at <a href="mailto:support@playpbnow.com">support@playpbnow.com</a>.</p>
+            <p>Upon request, we will delete your personal data within <strong>30 days</strong>.</p>
+        </div>
+
+        <!-- CHILDREN'S PRIVACY -->
+        <div class="section">
+            <h2><span class="icon icon-children">&#128103;</span> Children's Privacy</h2>
+            <p>Our app is <strong>not directed to children under 13</strong>. We do not knowingly collect personal information from children under 13. If we discover that we have inadvertently collected data from a child under 13, we will promptly delete it.</p>
+        </div>
+
+        <!-- CHANGES TO THIS POLICY -->
+        <div class="section">
+            <h2><span class="icon icon-changes">&#128196;</span> Changes to This Policy</h2>
+            <p>We may update this Privacy Policy from time to time. We will notify you of any changes by posting the <strong>new Privacy Policy</strong> within the app. Your continued use of PlayPBNow after changes are posted constitutes acceptance of the updated policy.</p>
+        </div>
+
+        <!-- CONTACT CARD -->
+        <div class="contact-card">
+            <h2>&#9993;&#65039; Questions?</h2>
+            <p>If you have any questions about this Privacy Policy, we'd love to hear from you.</p>
+            <a href="mailto:support@playpbnow.com" class="email-btn">support@playpbnow.com</a>
+        </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        &copy; 2026 <span>PlayPBNow</span>. All rights reserved.
+    </div>
+
 </body>
 </html>

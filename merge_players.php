@@ -26,6 +26,8 @@ require_once __DIR__ . '/db_config.php';
 $input = json_decode(file_get_contents('php://input'), true);
 $keep_id  = (int)($input['keep_id'] ?? 0);
 $merge_id = (int)($input['merge_id'] ?? 0);
+// Optional: frontend tells us which phone to use on the kept player
+$preferred_phone = isset($input['preferred_phone']) ? trim($input['preferred_phone']) : null;
 
 if (!$keep_id || !$merge_id || $keep_id === $merge_id) {
     echo json_encode(['status' => 'error', 'message' => 'Two different player IDs required']);
@@ -105,9 +107,21 @@ try {
     
     // ── 3. Fill in blanks on keep player ─────────────────────
     $updates = [];
-    if (empty($keepPlayer['cell_phone']) && !empty($mergePlayer['cell_phone'])) {
+
+    // Phone: if preferred_phone was sent, always use it.
+    // Otherwise, fill in blank from merge player.
+    if ($preferred_phone !== null && $preferred_phone !== '') {
+        $updates[] = "cell_phone = '" . $conn->real_escape_string($preferred_phone) . "'";
+    } else if ($preferred_phone === '') {
+        // Explicitly chose "no phone"
+        $updates[] = "cell_phone = NULL";
+    } else if (empty($keepPlayer['cell_phone']) && !empty($mergePlayer['cell_phone'])) {
+        // No preference sent and keep has no phone — take merge's phone
+        // First clear merge player's phone to avoid unique constraint conflict
+        $conn->query("UPDATE players SET cell_phone = NULL WHERE id = $merge_id");
         $updates[] = "cell_phone = '" . $conn->real_escape_string($mergePlayer['cell_phone']) . "'";
     }
+
     if (empty($keepPlayer['last_name']) && !empty($mergePlayer['last_name'])) {
         $updates[] = "last_name = '" . $conn->real_escape_string($mergePlayer['last_name']) . "'";
     }
@@ -120,7 +134,12 @@ try {
     if (empty($keepPlayer['dupr_rating']) && !empty($mergePlayer['dupr_rating'])) {
         $updates[] = "dupr_rating = " . floatval($mergePlayer['dupr_rating']);
     }
-    
+
+    // Clear merge player's phone BEFORE updating keep player to avoid unique constraint
+    if (!empty($mergePlayer['cell_phone'])) {
+        $conn->query("UPDATE players SET cell_phone = NULL WHERE id = $merge_id");
+    }
+
     if (!empty($updates)) {
         $conn->query("UPDATE players SET " . implode(', ', $updates) . " WHERE id = $keep_id");
     }

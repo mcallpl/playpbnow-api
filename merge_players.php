@@ -117,18 +117,24 @@ try {
     if (!$keepPlayer['is_verified'] && $mergePlayer['is_verified']) {
         $updates[] = "is_verified = 1";
     }
+    if (empty($keepPlayer['dupr_rating']) && !empty($mergePlayer['dupr_rating'])) {
+        $updates[] = "dupr_rating = " . floatval($mergePlayer['dupr_rating']);
+    }
     
     if (!empty($updates)) {
         $conn->query("UPDATE players SET " . implode(', ', $updates) . " WHERE id = $keep_id");
     }
     
-    // ── 4. Delete merged player ──────────────────────────────
+    // ── 4. Clean up not-duplicate records for merged player ──
+    $conn->query("DELETE FROM player_not_duplicates WHERE player_id_1 = $merge_id OR player_id_2 = $merge_id");
+
+    // ── 5. Delete merged player ──────────────────────────────
     $stmt = $conn->prepare("DELETE FROM players WHERE id = ?");
     $stmt->bind_param('i', $merge_id);
     $stmt->execute();
     $stmt->close();
     
-    // ── 5. Recalculate stats for kept player ─────────────────
+    // ── 6. Recalculate stats for kept player ─────────────────
     $t1Matches = dbGetAll("SELECT s1, s2 FROM matches WHERE p1_key = ? OR p2_key = ?", [$keepKey, $keepKey]);
     $t2Matches = dbGetAll("SELECT s1, s2 FROM matches WHERE p3_key = ? OR p4_key = ?", [$keepKey, $keepKey]);
     

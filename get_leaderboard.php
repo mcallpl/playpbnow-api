@@ -161,14 +161,28 @@ usort($leaderboard, function($a, $b) {
     return $b['diff'] - $a['diff'];
 });
 
-// Get roster from memberships (universal players)
+// Get roster from memberships (universal players) — include DUPR
 $roster = dbGetAll(
-    "SELECT p.player_key as id, p.first_name as name
+    "SELECT p.player_key as id, p.first_name as name, p.dupr_rating
      FROM players p
      INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
      WHERE pgm.group_id = ?",
     [$group_id]
 );
+
+// Build name-to-DUPR lookup for leaderboard enrichment
+$duprLookup = [];
+foreach ($roster as $r) {
+    if (!empty($r['dupr_rating'])) {
+        $duprLookup[$r['name']] = floatval($r['dupr_rating']);
+    }
+}
+
+// Enrich leaderboard with DUPR ratings
+foreach ($leaderboard as &$entry) {
+    $entry['dupr'] = $duprLookup[$entry['name']] ?? null;
+}
+unset($entry);
 
 echo json_encode([
     'status' => 'success',

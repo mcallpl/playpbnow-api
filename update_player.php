@@ -9,6 +9,7 @@ $first_name = trim($input['first_name'] ?? '');
 $last_name = trim($input['last_name'] ?? '');
 $cell_phone = trim($input['cell_phone'] ?? '');
 $gender = $input['gender'] ?? '';
+$dupr_rating = isset($input['dupr_rating']) ? $input['dupr_rating'] : null;
 
 if (empty($player_id)) {
     echo json_encode(['status' => 'error', 'message' => 'Player ID required']);
@@ -55,7 +56,18 @@ try {
         $updates[] = "gender = ?";
         $params[] = $gender;
     }
-    
+
+    // DUPR rating — allow setting to null (clear) or a valid number
+    if ($dupr_rating !== null) {
+        $rating = floatval($dupr_rating);
+        if ($rating >= 1.0 && $rating <= 8.0) {
+            $updates[] = "dupr_rating = ?";
+            $params[] = $rating;
+        } else if ($dupr_rating === '' || $dupr_rating === '0') {
+            $updates[] = "dupr_rating = NULL";
+        }
+    }
+
     $params[] = $player_id;
     
     $sql = "UPDATE players SET " . implode(", ", $updates) . " WHERE id = ?";

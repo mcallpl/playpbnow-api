@@ -2,44 +2,29 @@
 // ============================================
 // cleanup_duplicates.php — BULK MERGE ALL DUPLICATE PLAYERS
 //
-// For each owner, finds players with the same first_name (case-insensitive),
+// Finds ALL players with the same first_name (case-insensitive),
 // keeps the one with the most matches (or lowest ID as tiebreaker),
 // merges all others into it, and deletes the duplicates.
 //
 // Usage:
-//   GET  ?user_id=5&dry_run=1   — preview what would be merged (safe)
-//   GET  ?user_id=5              — actually perform the merges
+//   GET  ?dry_run=1   — preview what would be merged (safe)
+//   GET  (no params)  — actually perform the merges
 // ============================================
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 require_once __DIR__ . '/db_config.php';
 
-$user_id = $_GET['user_id'] ?? '';
 $dry_run = isset($_GET['dry_run']) && $_GET['dry_run'] == '1';
-
-if (empty($user_id)) {
-    echo json_encode(['status' => 'error', 'message' => 'user_id required']);
-    exit;
-}
 
 try {
     $conn = getDBConnection();
 
-    // 1. Get all players for this user
-    $stmt = $conn->prepare(
-        "SELECT p.* FROM players p
-         INNER JOIN `groups` g ON p.group_id = g.id
-         WHERE g.owner_user_id = ?
-         ORDER BY p.first_name ASC, p.id ASC"
-    );
-    $stmt->bind_param('i', $user_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    // 1. Get ALL players in the table
+    $result = $conn->query("SELECT * FROM players ORDER BY first_name ASC, id ASC");
     $allPlayers = [];
     while ($row = $result->fetch_assoc()) {
         $allPlayers[] = $row;
     }
-    $stmt->close();
 
     // 2. Group by lowercase first_name
     $nameGroups = [];
@@ -60,7 +45,7 @@ try {
         // Count matches for each player to pick the best one to keep
         $playerMatchCounts = [];
         foreach ($group as $p) {
-            $pk = $p['player_key'];
+            $pk = $conn->real_escape_string($p['player_key']);
             $countResult = $conn->query(
                 "SELECT COUNT(*) as cnt FROM matches
                  WHERE p1_key = '$pk' OR p2_key = '$pk' OR p3_key = '$pk' OR p4_key = '$pk'"
@@ -82,6 +67,7 @@ try {
 
         $groupAction = [
             'name' => $keepPlayer['first_name'],
+            'total_in_group' => count($group),
             'keep' => [
                 'id' => $keepId,
                 'player_key' => $keepKey,
@@ -142,10 +128,11 @@ try {
                 $updates = [];
                 if (empty($keepPlayer['cell_phone']) && !empty($mergePlayer['cell_phone'])) {
                     $updates[] = "cell_phone = '" . $conn->real_escape_string($mergePlayer['cell_phone']) . "'";
+                    $keepPlayer['cell_phone'] = $mergePlayer['cell_phone'];
                 }
                 if (empty($keepPlayer['last_name']) && !empty($mergePlayer['last_name'])) {
                     $updates[] = "last_name = '" . $conn->real_escape_string($mergePlayer['last_name']) . "'";
-                    $keepPlayer['last_name'] = $mergePlayer['last_name']; // carry forward
+                    $keepPlayer['last_name'] = $mergePlayer['last_name'];
                 }
                 if (empty($keepPlayer['home_court_id']) && !empty($mergePlayer['home_court_id'])) {
                     $updates[] = "home_court_id = " . (int)$mergePlayer['home_court_id'];
@@ -157,8 +144,8 @@ try {
                     $conn->query("UPDATE players SET " . implode(', ', $updates) . " WHERE id = $keepId");
                 }
 
-                // ── E. Clean up not-duplicate records ──
-                $conn->query("DELETE FROM player_not_duplicates WHERE player_id_1 = $mergeId OR player_id_2 = $mergeId");
+                // ── E. Clean up not-duplicate records (safe if table doesn't exist) ──
+                @$conn->query("DELETE FROM player_not_duplicates WHERE player_id_1 = $mergeId OR player_id_2 = $mergeId");
 
                 // ── F. Delete the duplicate player ──
                 $conn->query("DELETE FROM players WHERE id = $mergeId");
@@ -171,8 +158,9 @@ try {
 
         // ── G. Recalculate stats for kept player (after all merges for this name) ──
         if (!$dry_run) {
-            $t1 = $conn->query("SELECT s1, s2 FROM matches WHERE p1_key = '" . $conn->real_escape_string($keepKey) . "' OR p2_key = '" . $conn->real_escape_string($keepKey) . "'");
-            $t2 = $conn->query("SELECT s1, s2 FROM matches WHERE p3_key = '" . $conn->real_escape_string($keepKey) . "' OR p4_key = '" . $conn->real_escape_string($keepKey) . "'");
+            $ek = $conn->real_escape_string($keepKey);
+            $t1 = $conn->query("SELECT s1, s2 FROM matches WHERE p1_key = '$ek' OR p2_key = '$ek'");
+            $t2 = $conn->query("SELECT s1, s2 FROM matches WHERE p3_key = '$ek' OR p4_key = '$ek'");
 
             $wins = 0; $losses = 0; $diff = 0;
             while ($m = $t1->fetch_assoc()) {
@@ -202,10 +190,11 @@ try {
         'status' => 'success',
         'dry_run' => $dry_run,
         'message' => $dry_run
-            ? "DRY RUN: Would merge $totalMerged duplicate records. Add &dry_run=0 or remove dry_run param to execute."
-            : "Merged $totalMerged duplicate records. $totalDeleted players deleted.",
+            ? "DRY RUN: Would merge $totalMerged duplicate records across " . count($mergeActions) . " names. Remove dry_run param to execute."
+            : "DONE: Merged $totalMerged duplicate records. $totalDeleted players deleted.",
+        'total_players_before' => count($allPlayers),
         'duplicate_groups' => count($mergeActions),
-        'total_merged' => $totalMerged,
+        'total_to_merge' => $totalMerged,
         'actions' => $mergeActions,
     ], JSON_PRETTY_PRINT);
 

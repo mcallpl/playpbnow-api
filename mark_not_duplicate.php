@@ -26,6 +26,17 @@ $id1 = min($player_id_1, $player_id_2);
 $id2 = max($player_id_1, $player_id_2);
 
 try {
+    // Auto-create table if it doesn't exist
+    $conn = getDBConnection();
+    $conn->query("CREATE TABLE IF NOT EXISTS player_not_duplicates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        player_id_1 INT NOT NULL,
+        player_id_2 INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_pair (player_id_1, player_id_2)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $conn->close();
+
     // Check if already marked
     $existing = dbGetRow(
         "SELECT id FROM player_not_duplicates WHERE player_id_1 = ? AND player_id_2 = ?",

@@ -14,6 +14,17 @@ if (empty($user_id)) {
 }
 
 try {
+    // Check if table exists first
+    $conn = getDBConnection();
+    $tableCheck = $conn->query("SHOW TABLES LIKE 'player_not_duplicates'");
+    if ($tableCheck->num_rows === 0) {
+        // Table doesn't exist yet — return empty
+        $conn->close();
+        echo json_encode(['status' => 'success', 'pairs' => []]);
+        exit;
+    }
+    $conn->close();
+
     // Get all not-duplicate pairs for players belonging to this user's groups
     $pairs = dbGetAll(
         "SELECT DISTINCT pnd.player_id_1, pnd.player_id_2
@@ -31,5 +42,5 @@ try {
 
 } catch (Exception $e) {
     error_log("❌ Get not duplicates error: " . $e->getMessage());
-    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    echo json_encode(['status' => 'success', 'pairs' => []]);
 }

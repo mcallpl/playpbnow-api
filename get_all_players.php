@@ -15,10 +15,13 @@ try {
     // Use player_group_memberships to find players in groups owned by this user
     $players = dbGetAll(
         "SELECT p.*,
+                c.name as home_court_name,
+                c.city as home_court_city,
                 GROUP_CONCAT(DISTINCT g2.name ORDER BY g2.name SEPARATOR ', ') as group_names
          FROM players p
          INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
          INNER JOIN `groups` g ON pgm.group_id = g.id AND g.owner_user_id = ?
+         LEFT JOIN courts c ON p.home_court_id = c.id
          LEFT JOIN player_group_memberships pgm2 ON p.id = pgm2.player_id
          LEFT JOIN `groups` g2 ON pgm2.group_id = g2.id
          GROUP BY p.id

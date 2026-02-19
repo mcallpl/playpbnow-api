@@ -10,6 +10,7 @@ $last_name = trim($input['last_name'] ?? '');
 $cell_phone = trim($input['cell_phone'] ?? '');
 $gender = $input['gender'] ?? '';
 $dupr_rating = isset($input['dupr_rating']) ? $input['dupr_rating'] : null;
+$home_court_id = isset($input['home_court_id']) ? $input['home_court_id'] : null;
 
 if (empty($player_id)) {
     echo json_encode(['status' => 'error', 'message' => 'Player ID required']);
@@ -65,6 +66,16 @@ try {
             $params[] = $rating;
         } else if ($dupr_rating === '' || $dupr_rating === '0') {
             $updates[] = "dupr_rating = NULL";
+        }
+    }
+
+    // Home court — allow setting or clearing
+    if ($home_court_id !== null) {
+        if ($home_court_id === '' || $home_court_id === 0 || $home_court_id === '0') {
+            $updates[] = "home_court_id = NULL";
+        } else {
+            $updates[] = "home_court_id = ?";
+            $params[] = (int)$home_court_id;
         }
     }
 

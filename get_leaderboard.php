@@ -11,26 +11,35 @@ $batch_id  = $_GET['batch_id'] ?? 'all';
 
 $isGlobal = ($is_global === 'true' || $is_global === '1' || $is_global === 1);
 
-if (empty($group_key)) {
-    echo json_encode(['status' => 'error', 'message' => 'Missing group']);
-    exit;
-}
 if (empty($user_id) && !$isGlobal) {
     echo json_encode(['status' => 'error', 'message' => 'Missing user_id']);
     exit;
 }
 
-// Get group by NAME (the frontend sends group name, not key)
-$group = dbGetRow("SELECT id FROM `groups` WHERE name = ?", [$group_key]);
-if (!$group) {
-    echo json_encode(['status' => 'success', 'leaderboard' => [], 'history' => [], 'roster' => []]);
-    exit;
+// In GLOBAL mode: aggregate ALL matches across ALL groups
+// In MINE mode: filter to a specific group owned by this user
+$group_id = null;
+if (!$isGlobal) {
+    if (empty($group_key)) {
+        echo json_encode(['status' => 'error', 'message' => 'Missing group']);
+        exit;
+    }
+    $group = dbGetRow("SELECT id FROM `groups` WHERE name = ?", [$group_key]);
+    if (!$group) {
+        echo json_encode(['status' => 'success', 'leaderboard' => [], 'history' => [], 'roster' => []]);
+        exit;
+    }
+    $group_id = $group['id'];
 }
-$group_id = $group['id'];
 
 // BUILD QUERY — join matches to sessions via sessions.id (not batch_id)
-$whereClause = "WHERE m.group_id = ?";
-$params = [$group_id];
+$whereClause = "WHERE 1=1";
+$params = [];
+
+if (!$isGlobal && $group_id) {
+    $whereClause .= " AND m.group_id = ?";
+    $params[] = $group_id;
+}
 
 if (!$isGlobal) {
     $whereClause .= " AND s.user_id = ?";
@@ -161,14 +170,23 @@ usort($leaderboard, function($a, $b) {
     return $b['diff'] - $a['diff'];
 });
 
-// Get roster from memberships (universal players) — include DUPR
-$roster = dbGetAll(
-    "SELECT p.player_key as id, p.first_name as name, p.dupr_rating
-     FROM players p
-     INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
-     WHERE pgm.group_id = ?",
-    [$group_id]
-);
+// Get roster — in global mode, get ALL players; in mine mode, get group members
+if ($isGlobal) {
+    $roster = dbGetAll(
+        "SELECT DISTINCT p.player_key as id, p.first_name as name, p.dupr_rating
+         FROM players p
+         ORDER BY p.first_name ASC",
+        []
+    );
+} else {
+    $roster = dbGetAll(
+        "SELECT p.player_key as id, p.first_name as name, p.dupr_rating
+         FROM players p
+         INNER JOIN player_group_memberships pgm ON p.id = pgm.player_id
+         WHERE pgm.group_id = ?",
+        [$group_id]
+    );
+}
 
 // Build name-to-DUPR lookup for leaderboard enrichment
 $duprLookup = [];

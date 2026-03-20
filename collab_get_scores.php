@@ -20,7 +20,7 @@ if (!$share_code) {
 
 // Find active or finished session
 $session = dbGetRow(
-    "SELECT id, status, group_name, saved_session_id FROM collab_sessions WHERE share_code = ? AND status IN ('active', 'finished')",
+    "SELECT id, status, group_name, saved_session_id, schedule_json FROM collab_sessions WHERE share_code = ? AND status IN ('active', 'finished')",
     [$share_code]
 );
 
@@ -64,11 +64,11 @@ if ($since === 0) {
         [$sid]
     );
 } else {
-    // Incremental — only newer than last poll
-    $sinceDate = date('Y-m-d H:i:s', intval($since / 1000));
+    // Incremental — subtract 1s to catch same-second updates (client deduplicates)
+    $sinceDate = date('Y-m-d H:i:s', max(0, intval($since / 1000) - 1));
     $updates = dbGetAll(
-        "SELECT round_idx, game_idx, s1_str, s2_str, UNIX_TIMESTAMP(updated_at) as ts 
-         FROM collab_score_updates 
+        "SELECT round_idx, game_idx, s1_str, s2_str, UNIX_TIMESTAMP(updated_at) as ts
+         FROM collab_score_updates
          WHERE session_id = ? AND updated_at > ?
          ORDER BY updated_at ASC",
         [$sid, $sinceDate]
@@ -96,6 +96,7 @@ echo json_encode([
     'group_name' => $session['group_name'],
     'saved_session_id' => $session['saved_session_id'] ?? null,
     'updates' => $updates,
+    'schedule' => json_decode($session['schedule_json'], true),
     'connected_users' => (int)($connected['cnt'] ?? 0),
     'latest_timestamp' => $latestTs > 0 ? $latestTs * 1000 : $since,
     'session_active' => ($sessionStatus === 'active')

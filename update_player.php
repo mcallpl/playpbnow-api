@@ -5,12 +5,19 @@ require_once __DIR__ . '/db_config.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $player_id = $input['player_id'] ?? '';
+$player_key = $input['player_key'] ?? '';
 $first_name = trim($input['first_name'] ?? '');
 $last_name = trim($input['last_name'] ?? '');
 $cell_phone = trim($input['cell_phone'] ?? '');
 $gender = $input['gender'] ?? '';
 $dupr_rating = isset($input['dupr_rating']) ? $input['dupr_rating'] : null;
 $home_court_id = isset($input['home_court_id']) ? $input['home_court_id'] : null;
+
+// Resolve player_key to player_id if needed
+if (empty($player_id) && !empty($player_key)) {
+    $row = dbGetRow("SELECT id FROM players WHERE player_key = ?", [$player_key]);
+    if ($row) $player_id = $row['id'];
+}
 
 if (empty($player_id)) {
     echo json_encode(['status' => 'error', 'message' => 'Player ID required']);

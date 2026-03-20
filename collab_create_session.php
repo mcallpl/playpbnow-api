@@ -30,10 +30,11 @@ if (!$input) {
     exit;
 }
 
-$batch_id   = $input['batch_id'] ?? '';
-$group_name = $input['group_name'] ?? '';
-$schedule   = $input['schedule'] ?? [];
-$scores     = $input['scores'] ?? [];
+$batch_id        = $input['batch_id'] ?? '';
+$group_name      = $input['group_name'] ?? '';
+$schedule        = $input['schedule'] ?? [];
+$scores          = $input['scores'] ?? [];
+$creator_user_id = $input['creator_user_id'] ?? '';
 
 error_log("COLLAB_CREATE: batch_id=$batch_id, group_name=$group_name, schedule_count=" . count($schedule));
 
@@ -63,9 +64,9 @@ if ($tableCheck->num_rows === 0) {
 }
 $conn->close();
 
-// ── 3. Check if session already has a collab record ──────────
+// ── 3. Check if session already has a VALID (non-expired) collab record ──────────
 $existingSession = dbGetRow(
-    "SELECT id, share_code FROM collab_sessions WHERE batch_id = ? AND status = 'active'",
+    "SELECT id, share_code FROM collab_sessions WHERE batch_id = ? AND status = 'active' AND expires_at > NOW()",
     [$batch_id]
 );
 
@@ -107,14 +108,15 @@ $scheduleJson = json_encode($schedule);
 $scoresJson = json_encode($scores);
 
 $sessionId = dbInsert(
-    "INSERT INTO collab_sessions (batch_id, group_name, share_code, schedule_json, scores_json, status, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, 'active', NOW(), DATE_ADD(NOW(), INTERVAL 12 HOUR))",
+    "INSERT INTO collab_sessions (batch_id, group_name, share_code, schedule_json, scores_json, creator_user_id, status, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'active', NOW(), DATE_ADD(NOW(), INTERVAL 12 HOUR))",
     [
         $batch_id,
         $group_name,
         $shareCode,
         $scheduleJson,
-        $scoresJson
+        $scoresJson,
+        $creator_user_id
     ]
 );
 

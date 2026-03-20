@@ -117,6 +117,8 @@ try {
     // Determine if user has clean report access (pro or active trial)
     $can_clean_reports = ($tier === 'pro') || ($status === 'trial' && !$is_expired) || ($status === 'active' && !$is_expired);
 
+    $is_admin = (bool)($user['is_admin'] ?? false);
+
     echo json_encode([
         'status' => 'success',
         'subscription' => [
@@ -126,7 +128,8 @@ try {
             'trialStartDate' => $trial_start,
             'trialDaysRemaining' => $trial_days_remaining,
             'trialExpired' => ($status === 'expired' && $trial_start !== null),
-            'isPro' => $can_clean_reports,
+            'isPro' => $can_clean_reports || $is_admin,
+            'isAdmin' => $is_admin,
         ],
         'features' => [
             'canGenerateCleanReports' => $can_clean_reports,

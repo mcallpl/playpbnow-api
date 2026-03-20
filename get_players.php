@@ -34,6 +34,8 @@ try {
             'first_name' => $p['first_name'],
             'last_name' => $p['last_name'] ?? '',
             'gender' => $p['gender'],
+            'cell_phone' => $p['cell_phone'] ?? '',
+            'dupr_rating' => $p['dupr_rating'] ?? '',
             'home_court_id' => $p['home_court_id'],
             'home_court_name' => $p['home_court_name'] ?? null,
             'wins' => (int)$p['wins'],

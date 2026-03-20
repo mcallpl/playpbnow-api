@@ -25,7 +25,8 @@ if (empty($schedule)) {
 }
 
 // 2. CONFIG
-$font_file = './fonts/DejaVuSans.ttf'; 
+$font_file = __DIR__ . '/fonts/DejaVuSans.ttf';
+$font_bold = __DIR__ . '/fonts/DejaVuSansMono-Bold.ttf';
 $use_ttf = file_exists($font_file);
 
 // --- SETTINGS ---
@@ -117,16 +118,16 @@ foreach ($schedule as $round) {
         if ($s2 < $global_font_size) $global_font_size = $s2;
     }
 }
-$final_font_size = min(28, $global_font_size); 
+$final_font_size = min(32, $global_font_size);
 
 // --- DRAWING ---
 
 // Header
-drawCenteredText($im, $font_file, 40, 0, 10, $img_width, 80, $black, "Play PB Now!");
-drawCenteredText($im, $font_file, 18, 0, 80, $img_width, 120, $black, "$group_name ($date_str)");
+drawCenteredText($im, $font_bold, 44, 0, 10, $img_width, 80, $black, "Play PB Now!");
+drawCenteredText($im, $font_file, 22, 0, 80, $img_width, 120, $black, "$group_name ($date_str)");
 if ($court_name) {
     $court_color = imagecolorallocate($im, 80, 80, 80);
-    drawCenteredText($im, $font_file, 16, 0, 118, $img_width, 158, $court_color, $court_name);
+    drawCenteredText($im, $font_file, 18, 0, 118, $img_width, 158, $court_color, $court_name);
 }
 
 // Table Header
@@ -135,19 +136,19 @@ imagefilledrectangle($im, $margin, $y_cur, $img_width - $margin, $y_cur + $table
 
 $x_cur = $margin;
 // ROUND
-drawCenteredText($im, $font_file, 12, $x_cur, $y_cur, $x_cur+$col_round_width, $y_cur+$table_header_height, $white, "#");
+drawCenteredText($im, $font_bold, 16, $x_cur, $y_cur, $x_cur+$col_round_width, $y_cur+$table_header_height, $white, "#");
 $x_cur += $col_round_width;
 
 // COURTS
 for ($i=0; $i<$max_courts; $i++) {
     $x_next = $x_cur + $col_court_width;
-    drawCenteredText($im, $font_file, 14, $x_cur, $y_cur, $x_next, $y_cur+$table_header_height, $white, "COURT " . ($i + 1));
+    drawCenteredText($im, $font_bold, 18, $x_cur, $y_cur, $x_next, $y_cur+$table_header_height, $white, "COURT " . ($i + 1));
     $x_cur = $x_next;
 }
 
 // BYES HEADER
 if ($has_byes) {
-    drawCenteredText($im, $font_file, 14, $x_cur, $y_cur, $x_cur + $col_bye_width, $y_cur+$table_header_height, $white, "BYES");
+    drawCenteredText($im, $font_bold, 18, $x_cur, $y_cur, $x_cur + $col_bye_width, $y_cur+$table_header_height, $white, "BYES");
 }
 
 $y_cur += $table_header_height;
@@ -166,7 +167,7 @@ foreach ($schedule as $idx => $round) {
     $x_cur = $margin;
 
     // Round #
-    drawCenteredText($im, $font_file, 32, $x_cur, $y_cur, $x_cur+$col_round_width, $y_cur+$row_height, $black, (string)($idx+1));
+    drawCenteredText($im, $font_bold, 36, $x_cur, $y_cur, $x_cur+$col_round_width, $y_cur+$row_height, $black, (string)($idx+1));
     $x_cur += $col_round_width;
     imageline($im, $x_cur, $y_cur, $x_cur, $y_cur+$row_height, $grid_color);
 
@@ -189,7 +190,7 @@ foreach ($schedule as $idx => $round) {
             $y_t2_end   = $y_cur + $row_height - 2;
 
             drawCenteredText($im, $font_file, $final_font_size, $x_cur, $y_t1_start, $x_next, $y_t1_end, $black, $t1);
-            drawCenteredText($im, $font_file, 10, $x_cur, $y_vs_start, $x_next, $y_vs_end, $vs_color, "vs");
+            drawCenteredText($im, $font_file, 14, $x_cur, $y_vs_start, $x_next, $y_vs_end, $vs_color, "vs");
             drawCenteredText($im, $font_file, $final_font_size, $x_cur, $y_t2_start, $x_next, $y_t2_end, $black, $t2);
         } else {
              drawCenteredText($im, $font_file, 16, $x_cur, $y_cur, $x_next, $y_cur+$row_height, $grid_color, "---");
@@ -213,7 +214,7 @@ foreach ($schedule as $idx => $round) {
             foreach ($byes as $b_idx => $b_player) {
                 $y_pos = $y_cur + ($step * ($b_idx + 1));
                 // Smaller elegant text for byes (e.g. 14pt)
-                drawCenteredText($im, $font_file, 14, $x_cur, $y_pos - 15, $x_bye_end, $y_pos + 15, $black, $b_player['first_name']);
+                drawCenteredText($im, $font_file, 18, $x_cur, $y_pos - 15, $x_bye_end, $y_pos + 15, $black, $b_player['first_name']);
             }
         }
         imageline($im, $x_bye_end, $y_cur, $x_bye_end, $y_cur+$row_height, $grid_color);
@@ -263,10 +264,17 @@ $filename = 'match_report_' . time() . '.png';
 $filepath = $reports_dir . '/' . $filename;
 
 imagepng($im, $filepath);
+
+// Capture base64 image data
+ob_start();
+imagepng($im);
+$image_data = ob_get_clean();
+$base64_image = 'data:image/png;base64,' . base64_encode($image_data);
+
 imagedestroy($im);
 
 $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
 $url = "$protocol://$_SERVER[HTTP_HOST]" . dirname($_SERVER['REQUEST_URI']) . '/../reports/' . $filename;
 
-echo json_encode(['status' => 'success', 'url' => $url]);
+echo json_encode(['status' => 'success', 'url' => $url, 'image' => $base64_image]);
 ?>

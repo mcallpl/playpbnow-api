@@ -31,23 +31,31 @@ if (strlen($share_code) !== 6) {
 
 // ── 1. Find the active session by share code ──────────────────
 $session = dbGetRow(
-    "SELECT * FROM collab_sessions 
-     WHERE share_code = ? 
-     AND status = 'active' 
+    "SELECT * FROM collab_sessions
+     WHERE share_code = ?
+     AND status = 'active'
      AND expires_at > NOW()",
     [$share_code]
 );
 
 if (!$session) {
-    // Check if expired
-    $expired = dbGetRow(
-        "SELECT id FROM collab_sessions WHERE share_code = ? AND status = 'active'",
+    // Do a looser lookup to return a meaningful error
+    $anySession = dbGetRow(
+        "SELECT id, status, expires_at FROM collab_sessions WHERE share_code = ?",
         [$share_code]
     );
-    if ($expired) {
-        echo json_encode(['status' => 'error', 'message' => 'This session has expired']);
+    if ($anySession) {
+        $st = $anySession['status'];
+        if ($st === 'finished') {
+            echo json_encode(['status' => 'error', 'message' => 'This match has already been saved and closed.']);
+        } elseif ($st === 'active') {
+            // Active but expired
+            echo json_encode(['status' => 'error', 'message' => 'This session has expired. Ask the host to start a new shared session.']);
+        } else {
+            echo json_encode(['status' => 'error', 'message' => 'This session is no longer active (status: ' . $st . ').']);
+        }
     } else {
-        echo json_encode(['status' => 'error', 'message' => 'Invalid share code. Please check and try again.']);
+        echo json_encode(['status' => 'error', 'message' => 'Share code not found. Double-check the code and try again.']);
     }
     exit;
 }
@@ -80,7 +88,7 @@ $latestScores = json_decode($session['scores_json'], true) ?: [];
 
 // Also check for any score_updates that are newer than the snapshot
 $updates = dbGetAll(
-    "SELECT round_idx, game_idx, s1, s2 FROM collab_score_updates 
+    "SELECT round_idx, game_idx, s1_str, s2_str FROM collab_score_updates
      WHERE session_id = ? ORDER BY updated_at DESC",
     [(int)$session['id']]
 );
@@ -90,8 +98,10 @@ $appliedGames = [];
 foreach ($updates as $u) {
     $gameKey = $u['round_idx'] . '_' . $u['game_idx'];
     if (!isset($appliedGames[$gameKey])) {
-        $latestScores[$u['round_idx'] . '_' . $u['game_idx'] . '_t1'] = strval($u['s1']);
-        $latestScores[$u['round_idx'] . '_' . $u['game_idx'] . '_t2'] = strval($u['s2']);
+        $s1 = $u['s1_str'] ?? '';
+        $s2 = $u['s2_str'] ?? '';
+        if ($s1 !== '') $latestScores[$u['round_idx'] . '_' . $u['game_idx'] . '_t1'] = $s1;
+        if ($s2 !== '') $latestScores[$u['round_idx'] . '_' . $u['game_idx'] . '_t2'] = $s2;
         $appliedGames[$gameKey] = true;
     }
 }
@@ -110,7 +120,8 @@ echo json_encode([
         'id' => $session['id'],
         'batch_id' => $session['batch_id'],
         'group_name' => $session['group_name'],
-        'share_code' => $session['share_code']
+        'share_code' => $session['share_code'],
+        'creator_user_id' => $session['creator_user_id'] ?? ''
     ],
     'schedule' => json_decode($session['schedule_json'], true),
     'scores' => $latestScores,

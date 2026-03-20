@@ -13,8 +13,8 @@ require_once __DIR__ . '/db_config.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $group_key          = $input['group_key'] ?? '';
-$first_name         = trim($input['first_name'] ?? '');
-$last_name          = trim($input['last_name'] ?? '');
+$first_name         = ucfirst(strtolower(trim($input['first_name'] ?? '')));
+$last_name          = ucfirst(strtolower(trim($input['last_name'] ?? '')));
 $gender             = $input['gender'] ?? '';
 $player_key         = $input['player_key'] ?? 'pk_' . time() . '_' . rand(1000,9999);
 $cell_phone         = trim($input['cell_phone'] ?? '');
@@ -61,21 +61,31 @@ try {
         }
     }
 
-    // ── OPTION B2: Check for same name GLOBALLY ─────────────
-    // If a player with this name already exists anywhere, reuse that record
-    // instead of creating a duplicate. Just add them to this group.
+    // ── OPTION B2: Check for same name + gender GLOBALLY ────
+    // If a player with this name and gender already exists AND is NOT already
+    // in this group, reuse that record. If they're already in the group,
+    // skip to creating a new player (two different people with the same name).
     if (!$force_new) {
         $byName = dbGetAll(
             "SELECT p.id, p.player_key, p.first_name, p.last_name, p.cell_phone, p.gender
              FROM players p
-             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?))",
-            [$first_name]
+             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?)) AND LOWER(p.gender) = LOWER(?)",
+            [$first_name, $gender]
         );
         if (!empty($byName)) {
-            // Reuse the first matching player — just add them to this group
-            $player_id = (int)$byName[0]['id'];
-            $player_key = $byName[0]['player_key'];
-            goto add_membership;
+            // Find one that is NOT already in this group
+            foreach ($byName as $candidate) {
+                $alreadyInGroup = dbGetRow(
+                    "SELECT id FROM player_group_memberships WHERE player_id = ? AND group_id = ?",
+                    [$candidate['id'], $group_id]
+                );
+                if (!$alreadyInGroup) {
+                    $player_id = (int)$candidate['id'];
+                    $player_key = $candidate['player_key'];
+                    goto add_membership;
+                }
+            }
+            // All matches are already in this group — fall through to create new player
         }
     }
 

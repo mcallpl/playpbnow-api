@@ -1,24 +1,17 @@
-# Dependencies - installed via Composer
-/vendor/
-/Twilio/
-
-# Composer lock file
-composer.lock
-
-# Environment & config files with secrets
-.env
+# Files with hardcoded secrets — NEVER commit
 db_config.php
+sms_credits_api.php
+stripe_webhook.php
+migrate_players_and_invites.php
+run_stripe_migration.php
 
-# Log files
-*.log
+# Dependencies and generated files
+vendor/
+Twilio/
 save_debug.log
-
-# OS files
 .DS_Store
-Thumbs.db
 
-# IDE files
+# Keep example config tracked
+\!db_config.example.php
 .idea/
-.vscode/
-*.swp
-*.swo
+.idea/

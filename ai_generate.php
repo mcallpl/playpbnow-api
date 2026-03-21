@@ -16,9 +16,9 @@ require_once __DIR__ . '/db_config.php';
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
 
-// Gemini API config
-$GEMINI_API_KEY = 'AIzaSyDEaZULitnUZBpH-l7PGy33puDmRUyPcmM';
-$GEMINI_MODEL = 'gemini-2.5-flash-lite';
+// Gemini API config — keys defined in db_config.php (gitignored)
+$GEMINI_API_KEY = GEMINI_API_KEY;
+$GEMINI_MODEL = GEMINI_MODEL;
 
 function requireAdmin($user_id) {
     if (!$user_id) {

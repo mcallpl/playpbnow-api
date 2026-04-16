@@ -1,0 +1,29 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy API via rsync over SSH
+        uses: easingthemes/ssh-deploy@v5.1.0
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          REMOTE_HOST: 64.227.108.128
+          REMOTE_USER: root
+          TARGET: /var/www/html/PlayPBNow/api/
+          EXCLUDE: >-
+            .git/,
+            .github/,
+            .DS_Store,
+            .cpanel.yml,
+            vendor/,
+            *.sql,
+            *.bak,
+            db_config.php

@@ -78,24 +78,24 @@ if ($mode === 'register') {
         }
     }
 
+    // Phone is required
+    if (!$phone) {
+        echo json_encode(['status' => 'error', 'message' => 'Phone number is required']);
+        exit;
+    }
+
     // Hash password
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
     // Create new user with 30-day PRO trial
     $trial_end = date('Y-m-d H:i:s', strtotime('+30 days'));
     $now_str = date('Y-m-d H:i:s');
+    $device_id = bin2hex(random_bytes(16)); // Generate unique device_id
 
-    if ($phone) {
-        $user_id = dbInsert(
-            "INSERT INTO users (phone, email, password_hash, first_name, last_name, is_active, last_login_at, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, ?, ?, ?, ?, TRUE, NOW(), 'trial', 'pro', ?, ?)",
-            [$phone, $email, $password_hash, $first_name, $last_name, $now_str, $trial_end]
-        );
-    } else {
-        $user_id = dbInsert(
-            "INSERT INTO users (email, password_hash, first_name, last_name, is_active, last_login_at, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, ?, ?, ?, TRUE, NOW(), 'trial', 'pro', ?, ?)",
-            [$email, $password_hash, $first_name, $last_name, $now_str, $trial_end]
-        );
-    }
+    $user_id = dbInsert(
+        "INSERT INTO users (device_id, phone, email, password_hash, first_name, last_name, is_active, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, ?, ?, ?, ?, ?, 1, 'trial', 'premium', ?, ?)",
+        [$device_id, $phone, $email, $password_hash, $first_name, $last_name, $now_str, $trial_end]
+    );
 
     if (!$user_id) {
         echo json_encode(['status' => 'error', 'message' => 'Failed to create account. Please try again.']);

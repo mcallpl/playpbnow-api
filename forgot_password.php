@@ -23,8 +23,7 @@ if ($action === 'request_code') {
 
     $user = dbGetRow("SELECT id, first_name FROM users WHERE phone = ?", [$phone]);
     if (!$user) {
-        // Don't reveal whether the phone exists
-        echo json_encode(['status' => 'success', 'message' => 'If an account exists with this number, a reset code has been sent.']);
+        echo json_encode(['status' => 'error', 'message' => 'No account found with this phone number. Please create an account first.']);
         exit;
     }
 

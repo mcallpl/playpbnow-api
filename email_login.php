@@ -103,13 +103,14 @@ if ($mode === 'register') {
     }
 
     // Create feature_access row with full Pro access for trial
-    try {
-        dbQuery(
-            "INSERT INTO feature_access (user_id, can_create_matches, can_edit_matches, can_delete_matches, can_generate_reports, can_create_groups, max_groups, max_collab_sessions, max_players_per_group) VALUES (?, 1, 1, 1, 1, 1, 999, 999, 999)",
-            [$user_id]
-        );
-    } catch (Exception $e) {
-        error_log("email_login: could not create feature_access: " . $e->getMessage());
+    $fa = dbQuery(
+        "INSERT INTO feature_access (user_id, can_create_matches, can_edit_matches, can_delete_matches, can_generate_reports, can_create_groups, max_groups, max_collab_sessions, max_players_per_group) VALUES (?, 1, 1, 1, 1, 1, 999, 999, 999)",
+        [$user_id]
+    );
+    if (!$fa) {
+        error_log("email_login: could not create feature_access for user {$user_id}");
+        echo json_encode(['status' => 'error', 'message' => 'Account created but feature setup failed. Please try logging in.']);
+        exit;
     }
 
     $user = dbGetRow("SELECT * FROM users WHERE id = ?", [$user_id]);
@@ -190,7 +191,8 @@ if ($mode === 'register') {
             'phone' => $user['phone'],
             'email' => $user['email'] ?? '',
             'first_name' => $user['first_name'],
-            'last_name' => $user['last_name']
+            'last_name' => $user['last_name'],
+            'is_admin' => (bool)($user['is_admin'] ?? false)
         ],
         'session_token' => $session_token,
         'expires_at' => $session_expires

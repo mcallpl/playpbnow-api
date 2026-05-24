@@ -274,13 +274,11 @@ function sendVerificationCode($phone, $code) {
     try {
         $client = new Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
-        $message = $client->messages->create(
-            $phone,
-            [
-                'from' => TWILIO_PHONE_NUMBER,
-                'body' => "Your PlayPBNow verification code is: {$code}\n\nThis code expires in " . CODE_EXPIRY_MINUTES . " minutes."
-            ]
-        );
+        $message = $client->messages->create([
+            'to' => $phone,
+            'from' => TWILIO_PHONE_NUMBER,
+            'body' => "Your PlayPBNow verification code is: {$code}\n\nThis code expires in " . CODE_EXPIRY_MINUTES . " minutes."
+        ]);
 
         error_log("SMS sent to {$phone}: {$message->sid}");
         return true;

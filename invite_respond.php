@@ -62,7 +62,7 @@ function promoteNextWaitlisted($invite_id) {
             $message = "{$playerName}, a spot opened up! You're IN for pickleball {$shortDate} {$shortTime} @ {$invite['court_name']}. See you there!";
 
             $client = new \Twilio\Rest\Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-            $client->messages->create($phone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
+            $client->messages->create(['to' => $phone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
 
             // Note: No credit deduction for waitlist promotions — it's part of the original invite cost
         } catch (\Exception $e) {
@@ -177,6 +177,44 @@ switch ($action) {
 
         // Also handle: if player was waitlisted and now declines, remove from waitlist
         // (already handled by the status update above)
+
+        // ── Notify the Invite Organizer via SMS ──
+        // The person who created the invite needs to know when someone responds
+        $organizer = dbGetRow(
+            "SELECT u.phone, u.first_name FROM users u
+             JOIN match_invites mi ON mi.user_id = u.id
+             WHERE mi.id = ?",
+            [$invite['id']]
+        );
+        if ($organizer && !empty($organizer['phone'])) {
+            $orgPhone = cleanPhoneNumber($organizer['phone']);
+            if (!empty($orgPhone) && strlen(preg_replace('/[^0-9]/', '', $orgPhone)) >= 10) {
+                try {
+                    $shortDate = date('D M j', strtotime($invite['match_date']));
+                    $shortTime = date('g:iA', strtotime($invite['match_time']));
+                    $courtShort = $invite['court_name'];
+
+                    if ($wasWaitlisted) {
+                        $notifyMsg = "📋 {$playerName} joined the WAITLIST for {$shortDate} {$shortTime} @ {$courtShort} (all spots full).";
+                    } elseif ($actualStatus === 'confirmed') {
+                        $notifyMsg = "✅ {$playerName} is IN for {$shortDate} {$shortTime} @ {$courtShort}! ({$spots_left} spot" . ($spots_left !== 1 ? 's' : '') . " left)";
+                    } elseif ($actualStatus === 'interested') {
+                        $notifyMsg = "🤔 {$playerName} is INTERESTED in {$shortDate} {$shortTime} @ {$courtShort}.";
+                    } elseif ($actualStatus === 'declined') {
+                        $notifyMsg = "❌ {$playerName} DECLINED {$shortDate} {$shortTime} @ {$courtShort}.";
+                    } else {
+                        $notifyMsg = "";
+                    }
+
+                    if ($notifyMsg) {
+                        $client = new \Twilio\Rest\Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+                        $client->messages->create(['to' => $orgPhone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $notifyMsg]);
+                    }
+                } catch (\Exception $e) {
+                    error_log("Organizer notification SMS failed: " . $e->getMessage());
+                }
+            }
+        }
 
         // Build response message
         if ($wasWaitlisted) {

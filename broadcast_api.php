@@ -49,9 +49,11 @@ switch ($action) {
         $sms_text = trim($input['sms_text'] ?? '');
         $featured_image = trim($input['featured_image'] ?? '');
 
-        if (empty($subject) || empty($body_html) || empty($sms_text)) {
-            echo json_encode(['status' => 'error', 'message' => 'subject, body_html, and sms_text are required']); exit;
+        if (empty($sms_text)) {
+            echo json_encode(['status' => 'error', 'message' => 'SMS text is required']); exit;
         }
+        if (empty($subject)) $subject = 'Quick SMS';
+        if (empty($body_html)) $body_html = $sms_text;
 
         $broadcast_code = generateBroadcastCode();
 
@@ -130,7 +132,7 @@ switch ($action) {
             $message = "{$smsBody} Details: {$broadcastUrl}";
 
             try {
-                $client->messages->create($phone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
+                $client->messages->create(['to' => $phone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
 
                 // Record recipient
                 dbInsert(

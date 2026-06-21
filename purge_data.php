@@ -54,11 +54,29 @@ $results = [];
 $conn->query("SET FOREIGN_KEY_CHECKS = 0");
 
 foreach ($tablesToPurge as $table) {
-    $check = $conn->query("SHOW TABLES LIKE '$table'");
-    if ($check->num_rows > 0) {
-        $countResult = $conn->query("SELECT COUNT(*) as cnt FROM `$table`");
-        $count = $countResult->fetch_assoc()['cnt'];
-        $conn->query("TRUNCATE TABLE `$table`");
+    // Use hardcoded table names to prevent SQL injection - no user input allowed
+    if (!in_array($table, [
+        'collab_score_updates', 'collab_participants', 'collab_sessions', 'round_byes',
+        'matches', 'reports', 'sessions', 'player_group_memberships', 'feature_access',
+        'payment_transactions', 'subscriptions', 'sms_verifications', 'verification_codes',
+        'user_sessions', 'groups'
+    ])) {
+        $results[$table] = "Invalid table name — skipped for security";
+        continue;
+    }
+
+    // Use prepared statement with INFORMATION_SCHEMA to check table existence
+    $tableCheck = dbGetRow(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+        [$table]
+    );
+
+    if ($tableCheck) {
+        // Count rows before truncate
+        $countRow = dbGetRow("SELECT COUNT(*) as cnt FROM " . $conn->real_escape_string($table), []);
+        $count = $countRow['cnt'] ?? 0;
+        // Truncate is safe when table name is from hardcoded whitelist
+        $conn->query("TRUNCATE TABLE " . $conn->real_escape_string($table));
         $results[$table] = "Purged ($count rows)";
     } else {
         $results[$table] = "Table not found — skipped";
@@ -69,11 +87,12 @@ $conn->query("SET FOREIGN_KEY_CHECKS = 1");
 $conn->close();
 
 // Show what was preserved
-$conn2 = getDBConnection();
-$playerCount = $conn2->query("SELECT COUNT(*) as cnt FROM players")->fetch_assoc()['cnt'];
-$courtCount = $conn2->query("SELECT COUNT(*) as cnt FROM courts")->fetch_assoc()['cnt'];
-$userCount = $conn2->query("SELECT COUNT(*) as cnt FROM users")->fetch_assoc()['cnt'];
-$conn2->close();
+$playerRow = dbGetRow("SELECT COUNT(*) as cnt FROM players", []);
+$playerCount = $playerRow['cnt'] ?? 0;
+$courtRow = dbGetRow("SELECT COUNT(*) as cnt FROM courts", []);
+$courtCount = $courtRow['cnt'] ?? 0;
+$userRow = dbGetRow("SELECT COUNT(*) as cnt FROM users", []);
+$userCount = $userRow['cnt'] ?? 0;
 
 echo json_encode([
     'status' => 'success',

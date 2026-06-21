@@ -86,10 +86,10 @@ if ($match) {
 }
 
 echo "7. Cleaning up test data...\n";
-$conn->query("DELETE FROM matches WHERE device_id = '$test_device'");
-$conn->query("DELETE FROM sessions WHERE device_id = '$test_device'");
-$conn->query("DELETE FROM `groups` WHERE device_id = '$test_device'");
-$conn->query("DELETE FROM users WHERE device_id = '$test_device'");
+dbQuery("DELETE FROM matches WHERE device_id = ?", [$test_device]);
+dbQuery("DELETE FROM sessions WHERE device_id = ?", [$test_device]);
+dbQuery("DELETE FROM `groups` WHERE device_id = ?", [$test_device]);
+dbQuery("DELETE FROM users WHERE device_id = ?", [$test_device]);
 echo "✓ Test data removed\n\n";
 
 echo "========================================\n";

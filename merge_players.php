@@ -106,44 +106,38 @@ try {
     $stmt->close();
     
     // ── 3. ALWAYS clear merge player's phone first to prevent unique constraint conflicts
-    $conn->query("UPDATE players SET cell_phone = NULL WHERE id = $merge_id");
+    dbQuery("UPDATE players SET cell_phone = NULL WHERE id = ?", [$merge_id]);
     // Also clear keep player's phone if we're about to replace it
     if ($preferred_phone !== null) {
-        $conn->query("UPDATE players SET cell_phone = NULL WHERE id = $keep_id");
+        dbQuery("UPDATE players SET cell_phone = NULL WHERE id = ?", [$keep_id]);
     }
 
     // ── 4. Fill in blanks on keep player ─────────────────────
-    $updates = [];
-
     // Phone: if preferred_phone was sent, always use it.
     // Otherwise, fill in blank from merge player.
     if ($preferred_phone !== null && $preferred_phone !== '') {
-        $updates[] = "cell_phone = '" . $conn->real_escape_string($preferred_phone) . "'";
+        dbQuery("UPDATE players SET cell_phone = ? WHERE id = ?", [$preferred_phone, $keep_id]);
     } else if ($preferred_phone === '') {
-        $updates[] = "cell_phone = NULL";
+        dbQuery("UPDATE players SET cell_phone = NULL WHERE id = ?", [$keep_id]);
     } else if (empty($keepPlayer['cell_phone']) && !empty($mergePlayer['cell_phone'])) {
-        $updates[] = "cell_phone = '" . $conn->real_escape_string($mergePlayer['cell_phone']) . "'";
+        dbQuery("UPDATE players SET cell_phone = ? WHERE id = ?", [$mergePlayer['cell_phone'], $keep_id]);
     }
 
     if (empty($keepPlayer['last_name']) && !empty($mergePlayer['last_name'])) {
-        $updates[] = "last_name = '" . $conn->real_escape_string($mergePlayer['last_name']) . "'";
+        dbQuery("UPDATE players SET last_name = ? WHERE id = ?", [$mergePlayer['last_name'], $keep_id]);
     }
     if (empty($keepPlayer['home_court_id']) && !empty($mergePlayer['home_court_id'])) {
-        $updates[] = "home_court_id = " . (int)$mergePlayer['home_court_id'];
+        dbQuery("UPDATE players SET home_court_id = ? WHERE id = ?", [(int)$mergePlayer['home_court_id'], $keep_id]);
     }
     if (!$keepPlayer['is_verified'] && $mergePlayer['is_verified']) {
-        $updates[] = "is_verified = 1";
+        dbQuery("UPDATE players SET is_verified = 1 WHERE id = ?", [$keep_id]);
     }
     if (empty($keepPlayer['dupr_rating']) && !empty($mergePlayer['dupr_rating'])) {
-        $updates[] = "dupr_rating = " . floatval($mergePlayer['dupr_rating']);
-    }
-
-    if (!empty($updates)) {
-        $conn->query("UPDATE players SET " . implode(', ', $updates) . " WHERE id = $keep_id");
+        dbQuery("UPDATE players SET dupr_rating = ? WHERE id = ?", [floatval($mergePlayer['dupr_rating']), $keep_id]);
     }
     
     // ── 5. Clean up not-duplicate records for merged player (safe if table doesn't exist)
-    $conn->query("DELETE FROM player_not_duplicates WHERE player_id_1 = $merge_id OR player_id_2 = $merge_id");
+    @dbQuery("DELETE FROM player_not_duplicates WHERE player_id_1 = ? OR player_id_2 = ?", [$merge_id, $merge_id]);
 
     // ── 6. Delete merged player ──────────────────────────────
     $stmt = $conn->prepare("DELETE FROM players WHERE id = ?");

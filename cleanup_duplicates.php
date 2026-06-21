@@ -45,12 +45,13 @@ try {
         // Count matches for each player to pick the best one to keep
         $playerMatchCounts = [];
         foreach ($group as $p) {
-            $pk = $conn->real_escape_string($p['player_key']);
-            $countResult = $conn->query(
+            $pk = $p['player_key'];
+            $countRow = dbGetRow(
                 "SELECT COUNT(*) as cnt FROM matches
-                 WHERE p1_key = '$pk' OR p2_key = '$pk' OR p3_key = '$pk' OR p4_key = '$pk'"
+                 WHERE p1_key = ? OR p2_key = ? OR p3_key = ? OR p4_key = ?",
+                [$pk, $pk, $pk, $pk]
             );
-            $cnt = $countResult->fetch_assoc()['cnt'];
+            $cnt = $countRow['cnt'] ?? 0;
             $playerMatchCounts[$p['id']] = (int)$cnt;
         }
 
@@ -98,7 +99,7 @@ try {
             if (!$dry_run) {
                 // ── A. Transfer all match references ──
                 foreach (['p1_key', 'p2_key', 'p3_key', 'p4_key'] as $field) {
-                    $conn->query("UPDATE matches SET $field = '" . $conn->real_escape_string($keepKey) . "' WHERE $field = '" . $conn->real_escape_string($mergeKey) . "'");
+                    dbQuery("UPDATE matches SET $field = ? WHERE $field = ?", [$keepKey, $mergeKey]);
                 }
 
                 // Also update name fields in matches
@@ -107,48 +108,44 @@ try {
                     'p3_key' => 'p3_name', 'p4_key' => 'p4_name'
                 ];
                 foreach ($nameFields as $keyField => $nameField) {
-                    $conn->query("UPDATE matches SET $nameField = '" . $conn->real_escape_string($keepPlayer['first_name']) . "' WHERE $keyField = '" . $conn->real_escape_string($keepKey) . "'");
+                    dbQuery("UPDATE matches SET $nameField = ? WHERE $keyField = ?", [$keepPlayer['first_name'], $keepKey]);
                 }
 
                 // ── B. Transfer group memberships ──
-                $memResult = $conn->query("SELECT group_id FROM player_group_memberships WHERE player_id = $mergeId");
-                while ($mem = $memResult->fetch_assoc()) {
+                $memberships = dbGetAll("SELECT group_id FROM player_group_memberships WHERE player_id = ?", [$mergeId]);
+                foreach ($memberships as $mem) {
                     $gid = (int)$mem['group_id'];
-                    $existCheck = $conn->query("SELECT id FROM player_group_memberships WHERE player_id = $keepId AND group_id = $gid");
-                    if ($existCheck->num_rows === 0) {
-                        $conn->query("UPDATE player_group_memberships SET player_id = $keepId WHERE player_id = $mergeId AND group_id = $gid");
+                    $existCheck = dbGetRow("SELECT id FROM player_group_memberships WHERE player_id = ? AND group_id = ?", [$keepId, $gid]);
+                    if (!$existCheck) {
+                        dbQuery("UPDATE player_group_memberships SET player_id = ? WHERE player_id = ? AND group_id = ?", [$keepId, $mergeId, $gid]);
                     }
                 }
-                $conn->query("DELETE FROM player_group_memberships WHERE player_id = $mergeId");
+                dbQuery("DELETE FROM player_group_memberships WHERE player_id = ?", [$mergeId]);
 
                 // ── C. Clear merge player's phone to avoid unique constraint ──
-                $conn->query("UPDATE players SET cell_phone = NULL WHERE id = $mergeId");
+                dbQuery("UPDATE players SET cell_phone = NULL WHERE id = ?", [$mergeId]);
 
                 // ── D. Fill in blanks on keep player ──
-                $updates = [];
                 if (empty($keepPlayer['cell_phone']) && !empty($mergePlayer['cell_phone'])) {
-                    $updates[] = "cell_phone = '" . $conn->real_escape_string($mergePlayer['cell_phone']) . "'";
+                    dbQuery("UPDATE players SET cell_phone = ? WHERE id = ?", [$mergePlayer['cell_phone'], $keepId]);
                     $keepPlayer['cell_phone'] = $mergePlayer['cell_phone'];
                 }
                 if (empty($keepPlayer['last_name']) && !empty($mergePlayer['last_name'])) {
-                    $updates[] = "last_name = '" . $conn->real_escape_string($mergePlayer['last_name']) . "'";
+                    dbQuery("UPDATE players SET last_name = ? WHERE id = ?", [$mergePlayer['last_name'], $keepId]);
                     $keepPlayer['last_name'] = $mergePlayer['last_name'];
                 }
                 if (empty($keepPlayer['home_court_id']) && !empty($mergePlayer['home_court_id'])) {
-                    $updates[] = "home_court_id = " . (int)$mergePlayer['home_court_id'];
+                    dbQuery("UPDATE players SET home_court_id = ? WHERE id = ?", [(int)$mergePlayer['home_court_id'], $keepId]);
                 }
                 if (empty($keepPlayer['dupr_rating']) && !empty($mergePlayer['dupr_rating'])) {
-                    $updates[] = "dupr_rating = " . floatval($mergePlayer['dupr_rating']);
-                }
-                if (!empty($updates)) {
-                    $conn->query("UPDATE players SET " . implode(', ', $updates) . " WHERE id = $keepId");
+                    dbQuery("UPDATE players SET dupr_rating = ? WHERE id = ?", [floatval($mergePlayer['dupr_rating']), $keepId]);
                 }
 
                 // ── E. Clean up not-duplicate records (safe if table doesn't exist) ──
-                @$conn->query("DELETE FROM player_not_duplicates WHERE player_id_1 = $mergeId OR player_id_2 = $mergeId");
+                @dbQuery("DELETE FROM player_not_duplicates WHERE player_id_1 = ? OR player_id_2 = ?", [$mergeId, $mergeId]);
 
                 // ── F. Delete the duplicate player ──
-                $conn->query("DELETE FROM players WHERE id = $mergeId");
+                dbQuery("DELETE FROM players WHERE id = ?", [$mergeId]);
 
                 $totalDeleted++;
             }
@@ -158,17 +155,16 @@ try {
 
         // ── G. Recalculate stats for kept player (after all merges for this name) ──
         if (!$dry_run) {
-            $ek = $conn->real_escape_string($keepKey);
-            $t1 = $conn->query("SELECT s1, s2 FROM matches WHERE p1_key = '$ek' OR p2_key = '$ek'");
-            $t2 = $conn->query("SELECT s1, s2 FROM matches WHERE p3_key = '$ek' OR p4_key = '$ek'");
+            $t1Result = dbGetAll("SELECT s1, s2 FROM matches WHERE p1_key = ? OR p2_key = ?", [$keepKey, $keepKey]);
+            $t2Result = dbGetAll("SELECT s1, s2 FROM matches WHERE p3_key = ? OR p4_key = ?", [$keepKey, $keepKey]);
 
             $wins = 0; $losses = 0; $diff = 0;
-            while ($m = $t1->fetch_assoc()) {
+            foreach ($t1Result as $m) {
                 $s1 = (int)$m['s1']; $s2 = (int)$m['s2'];
                 if ($s1 > $s2) $wins++; elseif ($s2 > $s1) $losses++;
                 $diff += ($s1 - $s2);
             }
-            while ($m = $t2->fetch_assoc()) {
+            foreach ($t2Result as $m) {
                 $s1 = (int)$m['s1']; $s2 = (int)$m['s2'];
                 if ($s2 > $s1) $wins++; elseif ($s1 > $s2) $losses++;
                 $diff += ($s2 - $s1);
@@ -176,7 +172,7 @@ try {
             $total = $wins + $losses;
             $winPct = $total > 0 ? round(($wins / $total) * 100, 2) : 0.00;
 
-            $conn->query("UPDATE players SET wins = $wins, losses = $losses, diff = $diff, win_pct = $winPct WHERE id = $keepId");
+            dbQuery("UPDATE players SET wins = ?, losses = ?, diff = ?, win_pct = ? WHERE id = ?", [$wins, $losses, $diff, $winPct, $keepId]);
 
             $groupAction['new_stats'] = ['wins' => $wins, 'losses' => $losses, 'diff' => $diff, 'win_pct' => $winPct];
         }

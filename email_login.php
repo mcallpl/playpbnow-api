@@ -78,11 +78,9 @@ if ($mode === 'register') {
         }
     }
 
-    // Phone is required
-    if (!$phone) {
-        echo json_encode(['status' => 'error', 'message' => 'Phone number is required']);
-        exit;
-    }
+    // Phone is optional — email is the primary identifier for registration.
+    // (The UI labels the phone field "Optional"; requiring it here contradicted
+    // that and blocked every phone-less signup.)
 
     // Hash password
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
@@ -94,7 +92,7 @@ if ($mode === 'register') {
 
     $user_id = dbInsert(
         "INSERT INTO users (device_id, phone, email, password_hash, first_name, last_name, is_active, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, ?, ?, ?, ?, ?, 1, 'trial', 'premium', ?, ?)",
-        [$device_id, $phone, $email, $password_hash, $first_name, $last_name, $now_str, $trial_end]
+        [$device_id, $phone ?: null, $email, $password_hash, $first_name, $last_name, $now_str, $trial_end]
     );
 
     if (!$user_id) {

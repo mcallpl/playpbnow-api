@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 require_once __DIR__ . '/db_config.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
@@ -9,6 +9,13 @@ $user_id = $input['user_id'] ?? '';
 
 if (empty($group_key)) {
     echo json_encode(['status' => 'error', 'message' => 'Group key required']);
+    exit;
+}
+
+// user_id is REQUIRED — previously the ownership check was skipped when it was
+// absent, letting anyone delete any group just by omitting user_id.
+if (empty($user_id)) {
+    echo json_encode(['status' => 'error', 'message' => 'Authentication required']);
     exit;
 }
 
@@ -22,8 +29,20 @@ if (!$group) {
 
 $group_id = $group['id'];
 
-// Verify ownership if user_id provided
-if ($user_id && $group['owner_user_id'] != $user_id) {
+// Enforce ownership. Primary check: owner_user_id column. Fallback for legacy
+// groups where owner_user_id is NULL: group_key is formatted
+// "group_<timestamp>_<creatorUserId>", so the trailing segment identifies the
+// creator. This keeps legacy groups deletable by their real owner while still
+// blocking the previous bypass (omitting user_id / unowned groups).
+$authorized = false;
+if (!empty($group['owner_user_id'])) {
+    $authorized = ((string) $group['owner_user_id'] === (string) $user_id);
+} else {
+    $parts = explode('_', $group_key);
+    $keyOwner = end($parts);
+    $authorized = ($keyOwner !== '' && (string) $keyOwner === (string) $user_id);
+}
+if (!$authorized) {
     echo json_encode(['status' => 'error', 'message' => 'Not authorized to delete this group']);
     exit;
 }

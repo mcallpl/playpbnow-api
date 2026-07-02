@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 
 require_once __DIR__ . '/db_config.php';
 
@@ -14,6 +14,37 @@ if (empty($phone)) {
 
 // Clean and format phone number
 $clean_phone = cleanPhoneNumber($phone);
+
+// ── Rate limit: max 5 codes per phone per hour ──────────────────────────
+// This endpoint is unauthenticated and triggers a paid Twilio SMS, so without
+// a limit anyone can run up the Twilio bill / spam a number. Fail-OPEN: any
+// error here allows the send, so legitimate users are never blocked by an
+// infra problem — only confirmed abuse (>=5 in the last hour) is stopped.
+try {
+    $rlDir = sys_get_temp_dir() . '/pbnow_rl';
+    if (!is_dir($rlDir)) { @mkdir($rlDir, 0700, true); }
+    $rlFile = $rlDir . '/vc_' . md5($clean_phone);
+    $now = time();
+    $hits = [];
+    if (is_file($rlFile)) {
+        $raw = @file_get_contents($rlFile);
+        if ($raw !== false && $raw !== '') {
+            foreach (explode(',', $raw) as $t) {
+                $t = (int) $t;
+                if ($t > $now - 3600) { $hits[] = $t; }
+            }
+        }
+    }
+    if (count($hits) >= 5) {
+        http_response_code(429);
+        echo json_encode(['status' => 'error', 'message' => 'Too many code requests. Please wait a bit and try again.']);
+        exit;
+    }
+    $hits[] = $now;
+    @file_put_contents($rlFile, implode(',', $hits), LOCK_EX);
+} catch (Throwable $e) {
+    // fail open — never block a legitimate user due to a rate-limiter error
+}
 
 // Generate 6-digit code
 $code = generateVerificationCode();

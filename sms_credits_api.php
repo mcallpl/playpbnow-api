@@ -22,7 +22,9 @@ $action = $input['action'] ?? '';
 // Every action operates on the authenticated user only.
 $user_id = pbnow_require_session_user();
 
-define('STRIPE_SECRET_KEY', $vault_stripe_secret_key);
+// PlayPBNow's own least-privilege restricted key (Checkout Sessions only),
+// isolated from the shared $vault_stripe_secret_key other apps use.
+define('STRIPE_SECRET_KEY', $vault_stripe_playpbnow_key);
 
 $CREDIT_PACKAGES = [
     '20'   => ['credits' => 20,   'price_cents' => 100],

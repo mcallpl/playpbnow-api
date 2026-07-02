@@ -67,6 +67,13 @@ error_log("Stripe webhook: $type");
 
 switch ($type) {
     case 'checkout.session.completed':
+        // Isolation: this Stripe account is shared across several products, and
+        // Stripe delivers checkout.session.completed to EVERY endpoint subscribed
+        // to that event. Only act on sessions PlayPBNow itself created (its
+        // checkout tags metadata[app]=playpbnow).
+        if (($object['metadata']['app'] ?? '') !== 'playpbnow') {
+            break;
+        }
         $session_mode = $object['mode'] ?? '';
         $user_id = $object['metadata']['user_id'] ?? ($object['client_reference_id'] ?? null);
 

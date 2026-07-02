@@ -75,6 +75,7 @@ switch ($action) {
             'line_items[0][price_data][product_data][name]' => "{$pkg['credits']} SMS Credits",
             'line_items[0][price_data][product_data][description]' => 'PlayPBNow SMS invite credits',
             'line_items[0][quantity]' => 1,
+            'metadata[app]' => 'playpbnow',
             'metadata[user_id]' => $user_id,
             'metadata[credits]' => $pkg['credits'],
             // Absolute URLs (Stripe rejects relative ones).

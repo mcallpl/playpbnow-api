@@ -6,12 +6,22 @@
 // ============================================
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
 
-// Safety: require explicit confirmation
-$confirm = $_GET['confirm'] ?? '';
+// Destructive: POST + authenticated admin only (no GET trigger).
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['status' => 'error', 'message' => 'POST required']);
+    exit;
+}
+require_admin();
+
+// Safety: require explicit confirmation in the POST body
+$input = json_decode(file_get_contents('php://input'), true) ?? [];
+$confirm = $input['confirm'] ?? '';
 
 if ($confirm !== 'YES') {
     echo json_encode([

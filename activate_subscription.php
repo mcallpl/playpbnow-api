@@ -2,13 +2,19 @@
 // api/activate_subscription.php
 // Activates or updates a user's subscription (called by RevenueCat webhook or manual)
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+// Grants/revokes paid subscriptions — must be an authenticated admin.
+// (Real purchases flow through the signature-verified revenuecat_webhook.php /
+// stripe webhook; this endpoint is for manual admin adjustments only.)
+require_admin();
 
 $input = json_decode(file_get_contents('php://input'), true);
 $user_id = $input['user_id'] ?? null;

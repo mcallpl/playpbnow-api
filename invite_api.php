@@ -3,9 +3,9 @@
  * Invite API — Create and manage match invites
  */
 
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
@@ -54,8 +54,17 @@ function rebrandlyShorten(string $url, string $title = '', string $description =
     return null;
 }
 
-$input = json_decode(file_get_contents('php://input'), true);
+$input = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = $input['action'] ?? '';
+
+// All invite actions are organizer actions made from within the app (the public
+// pool-player flow lives in invite_respond.php). Require a valid session token
+// and force every action to act as the authenticated user — previously a
+// spoofable body user_id let anyone create/send invites as, and drain the SMS
+// credits of, another account.
+require_once __DIR__ . '/require_admin.php';
+$__auth_uid = pbnow_require_session_user();
+$input['user_id'] = (string) $__auth_uid;
 
 function generateMatchCode(): string {
     $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -177,9 +186,10 @@ switch ($action) {
                     [$invite_id, $player['id'], $phone, $player['first_name']]
                 );
 
-                // Deduct credit (admins are exempt)
+                // Deduct credit (admins are exempt). Floor guard prevents the
+                // balance going negative under concurrent sends.
                 if (!$is_admin) {
-                    dbQuery("UPDATE sms_credits SET credits = credits - 1 WHERE user_id = ?", [$user_id]);
+                    dbQuery("UPDATE sms_credits SET credits = credits - 1 WHERE user_id = ? AND credits > 0", [$user_id]);
                     dbInsert(
                         "INSERT INTO sms_credit_log (user_id, change_type, credits_changed, reason) VALUES (?, 'deduct', -1, ?)",
                         [$user_id, "SMS invite to player {$player['id']} for invite {$invite_id}"]

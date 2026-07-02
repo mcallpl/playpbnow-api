@@ -50,6 +50,22 @@ if (!function_exists('pbnow_require_session_user')) {
     }
 }
 
+if (!function_exists('pbnow_optional_user_id')) {
+    // Returns the authenticated user_id (int) from the session token, or null
+    // if no valid token was supplied. Does NOT exit — for endpoints that want to
+    // prefer the token but tolerate its absence during rollout.
+    function pbnow_optional_user_id(): ?int {
+        $token = pbnow_bearer_token();
+        if (!$token) return null;
+        $session = dbGetRow(
+            "SELECT user_id, expires_at FROM user_sessions WHERE session_token = ?",
+            [$token]
+        );
+        if (!$session || strtotime($session['expires_at']) < time()) return null;
+        return (int) $session['user_id'];
+    }
+}
+
 if (!function_exists('require_admin')) {
     // Returns the authenticated admin's user_id (int) or exits 401/403.
     function require_admin(): int {

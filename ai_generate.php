@@ -4,14 +4,15 @@
  * Uses Google Gemini to generate subject, SMS text, and landing page HTML
  */
 
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
@@ -20,15 +21,9 @@ $action = $input['action'] ?? '';
 $GEMINI_API_KEY = GEMINI_API_KEY;
 $GEMINI_MODEL = GEMINI_MODEL;
 
+// Identity from the verified session token, not a spoofable body user_id.
 function requireAdmin($user_id) {
-    if (!$user_id) {
-        echo json_encode(['status' => 'error', 'message' => 'user_id is required']); exit;
-    }
-    $userRow = dbGetRow("SELECT is_admin FROM users WHERE id = ?", [$user_id]);
-    if (!$userRow || !$userRow['is_admin']) {
-        echo json_encode(['status' => 'error', 'message' => 'Admin access required']); exit;
-    }
-    return true;
+    return require_admin(); // token-based; exits 401/403 if caller isn't an admin
 }
 
 function callGemini($prompt, $apiKey, $model) {

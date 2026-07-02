@@ -7,9 +7,14 @@
 // ============================================
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+// Must be a logged-in user (previously this endpoint had no identity check at
+// all, so anyone who knew a match_id + group name could rewrite the scores).
+$auth_uid = pbnow_require_session_user();
 
 $raw = file_get_contents('php://input');
 $input = json_decode($raw, true);
@@ -39,6 +44,13 @@ $group_id = (int)$group['id'];
 $match = dbGetRow("SELECT * FROM matches WHERE id = ? AND group_id = ?", [$match_id, $group_id]);
 if (!$match) {
     echo json_encode(['status' => 'error', 'message' => 'Match not found']);
+    exit;
+}
+
+// Ownership: if the match records a creator, only they may edit it.
+if (!empty($match['device_id']) && (string) $match['device_id'] !== (string) $auth_uid) {
+    http_response_code(403);
+    echo json_encode(['status' => 'error', 'message' => 'You can only edit matches you created']);
     exit;
 }
 

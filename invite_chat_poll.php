@@ -1,12 +1,18 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: https://peoplestar.com');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+// Chat is app-only (the public invite page has no chat), so require a valid
+// login. Previously anyone could read any invite's full chat history by
+// guessing the sequential invite_id.
+pbnow_require_session_user();
 
 $invite_id = $_GET['invite_id'] ?? null;
 $after_id = $_GET['after_id'] ?? null;

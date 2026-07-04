@@ -60,19 +60,21 @@ $img_height = $header_height + $table_header_height + (count($schedule) * $row_h
 // 4. INIT IMAGE
 $im = imagecreatetruecolor($img_width, $img_height);
 
-// Colors — premium PlayPBNow brand theme (court navy + optic green).
-// Variable names kept; values repurposed so the whole draw goes dark with
-// minimal changes ($black is now the light body text on navy, etc.).
-$white      = imagecolorallocate($im, 255, 255, 255);   // header-band text
-$black      = imagecolorallocate($im, 236, 243, 251);   // body text (light on navy)
-$dark_bg    = imagecolorallocate($im, 20, 34, 56);       // table header band
-$light_bg   = imagecolorallocate($im, 24, 40, 64);       // alternating row tint
-$grid_color = imagecolorallocate($im, 56, 78, 112);      // subtle grid lines
-$vs_color   = imagecolorallocate($im, 135, 202, 55);     // "vs" in optic green
-$bye_bg     = imagecolorallocate($im, 30, 48, 74);
-$navy       = imagecolorallocate($im, 15, 27, 45);       // #0f1b2d brand bg
-$green      = imagecolorallocate($im, 135, 202, 55);     // #87ca37 accent
-$soft       = imagecolorallocate($im, 168, 186, 212);    // muted subtitles
+// Colors — PRINT-FRIENDLY: white background + high-contrast dark text. A black
+// background wastes the recipient's ink when they print/save-as-PDF. Brand accents
+// (optic-green rule + a deep-green title) are used sparingly and stay readable.
+// Variable names kept so downstream draw calls need no changes.
+$white      = imagecolorallocate($im, 22, 32, 50);      // header-band + caption text (dark, on light band)
+$black      = imagecolorallocate($im, 22, 32, 50);      // body text — deep navy, ~15:1 contrast on white
+$dark_bg    = imagecolorallocate($im, 233, 238, 244);   // table header band (light gray, not dark)
+$light_bg   = imagecolorallocate($im, 246, 248, 251);   // alternating row tint (very light)
+$grid_color = imagecolorallocate($im, 201, 209, 219);   // grid lines (light gray)
+$vs_color   = imagecolorallocate($im, 120, 132, 148);   // "vs" (medium gray, readable)
+$bye_bg     = imagecolorallocate($im, 240, 244, 248);
+$navy       = imagecolorallocate($im, 255, 255, 255);   // PAGE BACKGROUND = white
+$green      = imagecolorallocate($im, 135, 202, 55);    // optic-green accent rule (decorative line only)
+$soft       = imagecolorallocate($im, 92, 104, 120);    // subtitles (medium-dark gray, readable)
+$titlecol   = imagecolorallocate($im, 60, 106, 22);     // title — deep pickleball green, ~6:1 on white
 
 imagefilledrectangle($im, 0, 0, $img_width, $img_height, $navy);
 // Optic-green accent rule under the header
@@ -132,7 +134,7 @@ $final_font_size = min(32, $global_font_size);
 // Header
 $title_txt = "YOU'RE INVITED TO PLAY";
 $title_size = $use_ttf ? min(38, calculateMaxFontSize($title_txt, $img_width - ($margin * 4), 46, $font_bold)) : 24;
-drawCenteredText($im, $font_bold, $title_size, 0, 8, $img_width, 58, $green, $title_txt);
+drawCenteredText($im, $font_bold, $title_size, 0, 8, $img_width, 58, $titlecol, $title_txt);
 drawCenteredText($im, $font_file, 24, 0, 60, $img_width, 100, $white, "$group_name  \xC2\xB7  $date_str");
 if ($court_name) {
     drawCenteredText($im, $font_file, 18, 0, 104, $img_width, 150, $soft, $court_name);
@@ -252,10 +254,10 @@ if (!$is_pro) {
     // 2. Bottom banner with upgrade CTA
     $banner_h = 48;
     $banner_y = $img_height - $banner_h;
-    $banner_bg = imagecolorallocatealpha($im, 27, 51, 88, 30); // Dark blue, semi-transparent
+    $banner_bg = imagecolorallocate($im, 233, 238, 244); // light gray strip (ink-light)
     imagefilledrectangle($im, 0, $banner_y, $img_width, $img_height, $banner_bg);
 
-    $banner_text_color = imagecolorallocate($im, 255, 255, 255);
+    $banner_text_color = imagecolorallocate($im, 60, 106, 22); // deep green, readable on light
     $banner_msg = "Upgrade to PlayPBNow Pro for clean reports";
     if ($use_ttf) {
         drawCenteredText($im, $font_file, 14, 0, $banner_y, $img_width, $img_height, $banner_text_color, $banner_msg);

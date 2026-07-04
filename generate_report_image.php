@@ -60,16 +60,23 @@ $img_height = $header_height + $table_header_height + (count($schedule) * $row_h
 // 4. INIT IMAGE
 $im = imagecreatetruecolor($img_width, $img_height);
 
-// Colors
-$white = imagecolorallocate($im, 255, 255, 255);
-$black = imagecolorallocate($im, 0, 0, 0);
-$dark_bg = imagecolorallocate($im, 40, 40, 40);
-$light_bg = imagecolorallocate($im, 245, 245, 245);
-$grid_color = imagecolorallocate($im, 180, 180, 180);
-$vs_color = imagecolorallocate($im, 150, 150, 150);
-$bye_bg = imagecolorallocate($im, 255, 245, 230); // Slight tint for Bye column
+// Colors — premium PlayPBNow brand theme (court navy + optic green).
+// Variable names kept; values repurposed so the whole draw goes dark with
+// minimal changes ($black is now the light body text on navy, etc.).
+$white      = imagecolorallocate($im, 255, 255, 255);   // header-band text
+$black      = imagecolorallocate($im, 236, 243, 251);   // body text (light on navy)
+$dark_bg    = imagecolorallocate($im, 20, 34, 56);       // table header band
+$light_bg   = imagecolorallocate($im, 24, 40, 64);       // alternating row tint
+$grid_color = imagecolorallocate($im, 56, 78, 112);      // subtle grid lines
+$vs_color   = imagecolorallocate($im, 135, 202, 55);     // "vs" in optic green
+$bye_bg     = imagecolorallocate($im, 30, 48, 74);
+$navy       = imagecolorallocate($im, 15, 27, 45);       // #0f1b2d brand bg
+$green      = imagecolorallocate($im, 135, 202, 55);     // #87ca37 accent
+$soft       = imagecolorallocate($im, 168, 186, 212);    // muted subtitles
 
-imagefilledrectangle($im, 0, 0, $img_width, $img_height, $white);
+imagefilledrectangle($im, 0, 0, $img_width, $img_height, $navy);
+// Optic-green accent rule under the header
+imagefilledrectangle($im, $margin, $header_height - 6, $img_width - $margin, $header_height - 3, $green);
 
 // --- FUNCTIONS ---
 function calculateMaxFontSize($text, $maxWidth, $maxHeight, $fontFile) {
@@ -123,11 +130,12 @@ $final_font_size = min(32, $global_font_size);
 // --- DRAWING ---
 
 // Header
-drawCenteredText($im, $font_bold, 44, 0, 10, $img_width, 80, $black, "Play PB Now!");
-drawCenteredText($im, $font_file, 22, 0, 80, $img_width, 120, $black, "$group_name ($date_str)");
+$title_txt = "YOU'RE INVITED TO PLAY";
+$title_size = $use_ttf ? min(38, calculateMaxFontSize($title_txt, $img_width - ($margin * 4), 46, $font_bold)) : 24;
+drawCenteredText($im, $font_bold, $title_size, 0, 8, $img_width, 58, $green, $title_txt);
+drawCenteredText($im, $font_file, 24, 0, 60, $img_width, 100, $white, "$group_name  \xC2\xB7  $date_str");
 if ($court_name) {
-    $court_color = imagecolorallocate($im, 80, 80, 80);
-    drawCenteredText($im, $font_file, 18, 0, 118, $img_width, 158, $court_color, $court_name);
+    drawCenteredText($im, $font_file, 18, 0, 104, $img_width, 150, $soft, $court_name);
 }
 
 // Table Header
@@ -258,8 +266,11 @@ if (!$is_pro) {
 }
 
 // SAVE
-$reports_dir = '../reports';
-if (!is_dir($reports_dir)) mkdir($reports_dir, 0755, true);
+// Absolute path (script-relative), NOT CWD-relative: PHP-FPM's working dir is
+// not the api/ folder, so '../reports' saved the image to a non-web-accessible
+// location → the shared /reports/<file>.png link 404'd ("broken image").
+$reports_dir = __DIR__ . '/../reports';
+if (!is_dir($reports_dir)) mkdir($reports_dir, 0775, true);
 $filename = 'match_report_' . time() . '.png';
 $filepath = $reports_dir . '/' . $filename;
 
@@ -273,8 +284,11 @@ $base64_image = 'data:image/png;base64,' . base64_encode($image_data);
 
 imagedestroy($im);
 
+// Return wrapper page URL using the domain the request came from
+// This respects whether user accessed from playpbnow.com or playpbnow.peoplestar.com
 $protocol = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http";
-$url = "$protocol://$_SERVER[HTTP_HOST]" . dirname($_SERVER['REQUEST_URI']) . '/../reports/' . $filename;
+$host = $_SERVER['HTTP_HOST'] ?? 'playpbnow.peoplestar.com';
+$url = "$protocol://$host/report.php?img=" . $filename;
 
 echo json_encode(['status' => 'success', 'url' => $url, 'image' => $base64_image]);
 ?>

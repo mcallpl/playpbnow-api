@@ -1,7 +1,11 @@
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+$auth_uid = pbnow_require_session_user();
 
 $input = json_decode(file_get_contents('php://input'), true);
 $player_id = $input['player_id'] ?? '';
@@ -22,6 +26,19 @@ if (empty($player_id) && !empty($player_key)) {
 if (empty($player_id)) {
     echo json_encode(['status' => 'error', 'message' => 'Player ID required']);
     exit;
+}
+
+// Creator-only edit: only the user who created this player may edit it.
+// super_admin bypasses. (Everyone else can contribute matches, never edit.)
+$target = dbGetRow("SELECT created_by_user_id FROM players WHERE id = ?", [$player_id]);
+if (!$target) { echo json_encode(['status' => 'error', 'message' => 'Player not found']); exit; }
+if (!pbnow_is_admin($auth_uid)) {
+    $creator = $target['created_by_user_id'] !== null ? (int)$target['created_by_user_id'] : null;
+    if ($creator === null || $creator !== $auth_uid) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'You can only edit players you created.']);
+        exit;
+    }
 }
 
 try {

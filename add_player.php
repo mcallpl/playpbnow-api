@@ -31,13 +31,15 @@ if (!$existing_player_id && (empty($first_name) || empty($gender))) {
 
 try {
     $group = dbGetRow(
-        "SELECT g.id, g.court_id FROM `groups` g WHERE g.group_key = ?",
+        "SELECT g.id, g.court_id, g.owner_user_id FROM `groups` g WHERE g.group_key = ?",
         [$group_key]
     );
     if (!$group) { echo json_encode(['status' => 'error', 'message' => 'Group not found']); exit; }
-    
+
     $group_id = (int)$group['id'];
     $court_id = $group['court_id'] ? (int)$group['court_id'] : null;
+    // Creator ownership: the group owner is who's adding to their roster.
+    $creator_uid = $group['owner_user_id'] ? (int)$group['owner_user_id'] : null;
 
     // ── OPTION A: Link existing player by ID ─────────────────
     if ($existing_player_id) {
@@ -93,10 +95,10 @@ try {
     // Use NULL for cell_phone if not provided (avoids unique constraint on empty string)
     $conn = getDBConnection();
     $stmt = $conn->prepare(
-        "INSERT INTO players (group_id, player_key, first_name, last_name, gender, cell_phone, home_court_id, device_id, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, '', NOW())"
+        "INSERT INTO players (group_id, player_key, first_name, last_name, gender, cell_phone, home_court_id, created_by_user_id, device_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NOW())"
     );
-    $stmt->bind_param('isssssi', $group_id, $player_key, $first_name, $last_name, $gender, $cell_phone, $court_id);
+    $stmt->bind_param('isssssii', $group_id, $player_key, $first_name, $last_name, $gender, $cell_phone, $court_id, $creator_uid);
     $stmt->execute();
     $player_id = $stmt->insert_id;
     $stmt->close();

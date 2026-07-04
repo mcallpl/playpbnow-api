@@ -79,3 +79,44 @@ if (!function_exists('require_admin')) {
         return $userId;
     }
 }
+
+// ── Role helpers (Universal Player Identity, Phase 1) ────────────────────────
+if (!function_exists('pbnow_is_admin')) {
+    // super_admin — can edit/delete anything.
+    function pbnow_is_admin(int $uid): bool {
+        $u = dbGetRow("SELECT is_admin FROM users WHERE id = ?", [$uid]);
+        return $u && (int)$u['is_admin'] === 1;
+    }
+}
+
+if (!function_exists('pbnow_user_is_premium')) {
+    // "Premium" = an active OR in-trial subscription that hasn't lapsed. Admins
+    // always count as premium. Matches the app's isPro || isTrial gating (new
+    // users are on a 30-day premium trial, so trial must be included).
+    function pbnow_user_is_premium(int $uid): bool {
+        $u = dbGetRow(
+            "SELECT is_admin, subscription_status, subscription_end_date FROM users WHERE id = ?",
+            [$uid]
+        );
+        if (!$u) return false;
+        if ((int)$u['is_admin'] === 1) return true;
+        if (in_array($u['subscription_status'] ?? '', ['active', 'trial'], true)) {
+            $end = $u['subscription_end_date'] ?? null;
+            if ($end === null || strtotime($end) > time()) return true;
+        }
+        return false;
+    }
+}
+
+if (!function_exists('pbnow_require_premium')) {
+    // Session user who is premium (or admin), else 402. Returns the user_id.
+    function pbnow_require_premium(): int {
+        $uid = pbnow_require_session_user();
+        if (!pbnow_user_is_premium($uid)) {
+            http_response_code(402); // Payment Required
+            echo json_encode(['status' => 'error', 'message' => 'This feature requires PlayPBNow Pro.', 'code' => 'premium_required']);
+            exit;
+        }
+        return $uid;
+    }
+}

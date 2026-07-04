@@ -45,9 +45,9 @@ function pbnow_create_starter_group($user_id) {
             $player_key = 'pk_' . time() . '_' . $user_id . '_' . $i . '_' . rand(1000, 9999);
 
             $player_id = dbInsert(
-                "INSERT INTO players (group_id, player_key, first_name, last_name, gender, cell_phone, home_court_id, device_id, created_at)
-                 VALUES (?, ?, ?, '', ?, NULL, NULL, '', NOW())",
-                [$group_id, $player_key, $first, $gender]
+                "INSERT INTO players (group_id, player_key, first_name, last_name, gender, cell_phone, home_court_id, created_by_user_id, device_id, created_at)
+                 VALUES (?, ?, ?, '', ?, NULL, NULL, ?, '', NOW())",
+                [$group_id, $player_key, $first, $gender, $user_id]
             );
             if (!$player_id) {
                 error_log("starter_group: failed to create player {$first} for user {$user_id}");

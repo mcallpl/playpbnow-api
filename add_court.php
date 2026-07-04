@@ -2,22 +2,25 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+// Adding to the shared court catalog is a Premium (or super_admin) action.
+// Identity comes from the verified session, never a client-supplied user_id.
+$user_id = pbnow_require_premium();
 
 $input = json_decode(file_get_contents('php://input'), true);
 $name    = trim($input['name'] ?? '');
 $city    = trim($input['city'] ?? '');
 $state   = trim($input['state'] ?? '');
 $address = trim($input['address'] ?? '');
-$user_id = $input['user_id'] ?? '';
 
 if (empty($name))    { echo json_encode(['status' => 'error', 'message' => 'Court name required']); exit; }
 if (empty($city))    { echo json_encode(['status' => 'error', 'message' => 'City required']); exit; }
 if (empty($address)) { echo json_encode(['status' => 'error', 'message' => 'Address required']); exit; }
-if (empty($user_id)) { echo json_encode(['status' => 'error', 'message' => 'User ID required']); exit; }
 
 // Geocode the address using Google Maps API
 function geocodeAddress($name, $address, $city, $state) {

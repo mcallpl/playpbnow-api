@@ -17,11 +17,15 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+// Merging into the master list is a Premium (or super_admin) action.
+$actor = pbnow_require_premium();
 
 $input = json_decode(file_get_contents('php://input'), true);
 $keep_id  = (int)($input['keep_id'] ?? 0);
@@ -42,7 +46,20 @@ try {
         echo json_encode(['status' => 'error', 'message' => 'One or both players not found']);
         exit;
     }
-    
+
+    // Cross-user safety: you can only merge records YOU created. This makes the
+    // universal data append-only for everyone else — a merge can never delete or
+    // absorb another user's player. super_admin bypasses.
+    if (!pbnow_is_admin($actor)) {
+        $keepOwner  = (int)($keepPlayer['created_by_user_id'] ?? 0);
+        $mergeOwner = (int)($mergePlayer['created_by_user_id'] ?? 0);
+        if ($keepOwner !== $actor || $mergeOwner !== $actor) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => 'You can only merge players you created.']);
+            exit;
+        }
+    }
+
     $keepKey  = $keepPlayer['player_key'];
     $mergeKey = $mergePlayer['player_key'];
     

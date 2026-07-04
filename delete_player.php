@@ -15,17 +15,21 @@ if (empty($player_id)) {
     exit;
 }
 
-// Ownership: if the player records a creator, only they may delete it.
-$player = dbGetRow("SELECT id, device_id, created_by_device_id FROM players WHERE id = ?", [$player_id]);
+// Creator-only delete: only the user who created this player may delete it.
+// (The old check compared a device_id string to a user_id int — always mismatched.)
+// super_admin bypasses.
+$player = dbGetRow("SELECT id, created_by_user_id FROM players WHERE id = ?", [$player_id]);
 if (!$player) {
     echo json_encode(['status' => 'error', 'message' => 'Player not found']);
     exit;
 }
-$owner = $player['device_id'] ?: $player['created_by_device_id'];
-if (!empty($owner) && (string) $owner !== (string) $auth_uid) {
-    http_response_code(403);
-    echo json_encode(['status' => 'error', 'message' => 'You can only delete players you added']);
-    exit;
+if (!pbnow_is_admin($auth_uid)) {
+    $creator = $player['created_by_user_id'] !== null ? (int)$player['created_by_user_id'] : null;
+    if ($creator === null || $creator !== $auth_uid) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'You can only delete players you created.']);
+        exit;
+    }
 }
 
 try {

@@ -111,6 +111,11 @@ if ($mode === 'register') {
         exit;
     }
 
+    // Seed a ready-to-use "Test Group" (16 practice players) for the new member.
+    // Best-effort — never blocks registration.
+    require_once __DIR__ . '/starter_group.php';
+    pbnow_create_starter_group($user_id);
+
     $user = dbGetRow("SELECT * FROM users WHERE id = ?", [$user_id]);
 
     // Create session token

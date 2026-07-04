@@ -10,6 +10,8 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+require_once __DIR__ . '/identity.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $group_key          = $input['group_key'] ?? '';
@@ -27,6 +29,19 @@ if ($cell_phone === '') $cell_phone = null;
 if (empty($group_key)) { echo json_encode(['status' => 'error', 'message' => 'Group key required']); exit; }
 if (!$existing_player_id && (empty($first_name) || empty($gender))) {
     echo json_encode(['status' => 'error', 'message' => 'Name and gender required']); exit;
+}
+
+// Universal identity link (Phase 2): a phone number is what unifies "the same
+// person" across organizers, and creating that link is a Pro perk. Free users
+// can still store a phone on their own local player — they just don't get the
+// universal link (identity_id stays null). The raw number is never shared: only
+// a peppered hash is stored on the master identity.
+$identity_id = null;
+if ($cell_phone !== null) {
+    $actor = pbnow_optional_user_id();
+    if ($actor !== null && pbnow_user_is_premium($actor)) {
+        $identity_id = pbnow_resolve_identity($cell_phone, $first_name);
+    }
 }
 
 try {
@@ -50,11 +65,13 @@ try {
         goto add_membership;
     }
 
-    // ── OPTION B: Search by phone first (if provided) ────────
+    // ── OPTION B: Reuse YOUR OWN player with this phone (dedup within your
+    //    roster). Never reuse another user's record — cross-organizer linkage
+    //    happens through identity_id, not by sharing a player row.
     if ($cell_phone) {
         $byPhone = dbGetRow(
-            "SELECT id, player_key FROM players WHERE cell_phone = ?",
-            [$cell_phone]
+            "SELECT id, player_key FROM players WHERE cell_phone = ? AND created_by_user_id = ?",
+            [$cell_phone, $creator_uid]
         );
         if ($byPhone) {
             $player_id = (int)$byPhone['id'];
@@ -68,11 +85,12 @@ try {
     // in this group, reuse that record. If they're already in the group,
     // skip to creating a new player (two different people with the same name).
     if (!$force_new) {
+        // Own records only — never absorb another user's same-named player.
         $byName = dbGetAll(
             "SELECT p.id, p.player_key, p.first_name, p.last_name, p.cell_phone, p.gender
              FROM players p
-             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?)) AND LOWER(p.gender) = LOWER(?)",
-            [$first_name, $gender]
+             WHERE LOWER(TRIM(p.first_name)) = LOWER(TRIM(?)) AND LOWER(p.gender) = LOWER(?) AND p.created_by_user_id = ?",
+            [$first_name, $gender, $creator_uid]
         );
         if (!empty($byName)) {
             // Find one that is NOT already in this group
@@ -95,10 +113,10 @@ try {
     // Use NULL for cell_phone if not provided (avoids unique constraint on empty string)
     $conn = getDBConnection();
     $stmt = $conn->prepare(
-        "INSERT INTO players (group_id, player_key, first_name, last_name, gender, cell_phone, home_court_id, created_by_user_id, device_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', NOW())"
+        "INSERT INTO players (group_id, player_key, first_name, last_name, gender, cell_phone, home_court_id, created_by_user_id, identity_id, device_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', NOW())"
     );
-    $stmt->bind_param('isssssii', $group_id, $player_key, $first_name, $last_name, $gender, $cell_phone, $court_id, $creator_uid);
+    $stmt->bind_param('isssssiii', $group_id, $player_key, $first_name, $last_name, $gender, $cell_phone, $court_id, $creator_uid, $identity_id);
     $stmt->execute();
     $player_id = $stmt->insert_id;
     $stmt->close();

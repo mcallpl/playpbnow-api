@@ -132,10 +132,11 @@ $final_font_size = min(32, $global_font_size);
 // --- DRAWING ---
 
 // Header
-$title_txt = "YOU'RE INVITED TO PLAY";
-$title_size = $use_ttf ? min(38, calculateMaxFontSize($title_txt, $img_width - ($margin * 4), 46, $font_bold)) : 24;
+// Title = the match's identity (group name), not a generic tagline.
+$title_txt = $group_name;
+$title_size = $use_ttf ? min(40, calculateMaxFontSize($title_txt, $img_width - ($margin * 4), 48, $font_bold)) : 24;
 drawCenteredText($im, $font_bold, $title_size, 0, 8, $img_width, 58, $titlecol, $title_txt);
-drawCenteredText($im, $font_file, 24, 0, 60, $img_width, 100, $white, "$group_name  \xC2\xB7  $date_str");
+drawCenteredText($im, $font_file, 22, 0, 62, $img_width, 100, $black, $date_str);
 if ($court_name) {
     drawCenteredText($im, $font_file, 18, 0, 104, $img_width, 150, $soft, $court_name);
 }

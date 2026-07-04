@@ -15,12 +15,16 @@ function pbnow_create_starter_group($user_id) {
     if ($user_id <= 0) return null;
 
     try {
-        // 1. The group (owned by the new user).
+        // 1. The group (owned by the new user), defaulted to the first court in
+        //    the shared catalog (same ordering the app's picker uses). The user
+        //    changes it to their real court — we just never leave it blank.
+        $default_court = dbGetRow("SELECT id FROM courts ORDER BY name ASC LIMIT 1");
+        $court_id = $default_court ? (int)$default_court['id'] : null;
         $group_key = 'group_' . time() . '_' . $user_id;
         $group_id = dbInsert(
             "INSERT INTO `groups` (name, group_key, owner_user_id, court_id, device_id, created_at, updated_at)
-             VALUES ('Test Group', ?, ?, NULL, '', NOW(), NOW())",
-            [$group_key, $user_id]
+             VALUES ('Test Group', ?, ?, ?, '', NOW(), NOW())",
+            [$group_key, $user_id, $court_id]
         );
         if (!$group_id) {
             error_log("starter_group: failed to create group for user {$user_id}");

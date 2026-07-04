@@ -310,7 +310,7 @@ foreach ([1, 2] as $maxAllowed) {
 
 if ($best === null) $best = [];
 
-error_log("🎾 Schedule result: " . (empty($best) ? "FAILED/EMPTY" : count($best) . " rounds"));
+error_log("Schedule result: " . (empty($best) ? "FAILED/EMPTY" : count($best) . " rounds"));
 
 echo json_encode(['status'=>'success', 'schedule'=>$best]);
 ?>

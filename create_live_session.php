@@ -102,7 +102,7 @@ foreach ($schedule as $roundIdx => $round) {
     }
 }
 
-error_log("🎾 Created live session: {$share_code} with " . count($schedule) . " rounds");
+error_log("Created live session: {$share_code} with " . count($schedule) . " rounds");
 
     echo json_encode([
         'status' => 'success',

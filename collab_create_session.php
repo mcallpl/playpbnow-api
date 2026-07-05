@@ -66,16 +66,31 @@ $conn->close();
 
 // ── 3. Check if session already has a VALID (non-expired) collab record ──────────
 $existingSession = dbGetRow(
-    "SELECT id, share_code FROM collab_sessions WHERE batch_id = ? AND status = 'active' AND expires_at > NOW()",
+    "SELECT id, share_code, schedule_json FROM collab_sessions WHERE batch_id = ? AND status = 'active' AND expires_at > NOW()",
     [$batch_id]
 );
 
 if ($existingSession) {
-    error_log("COLLAB_CREATE: Found existing session, code=" . $existingSession['share_code']);
+    // Same group, active session. If the host is sharing a DIFFERENT schedule,
+    // this is a NEW match on the same group (the old session was abandoned) —
+    // reusing the stale schedule/scores would attach synced scores to the wrong
+    // matchups on every joining device. Adopt the new schedule and wipe the
+    // stale scores. If the schedule is identical, it's a true resume: keep all.
+    $existingId = (int)$existingSession['id'];
+    $newScheduleJson = json_encode($schedule);
+    if (($existingSession['schedule_json'] ?? '') !== $newScheduleJson) {
+        error_log("COLLAB_CREATE: Reusing session $existingId but schedule changed — resetting for new match");
+        dbQuery("UPDATE collab_sessions SET schedule_json = ?, scores_json = ?, expires_at = DATE_ADD(NOW(), INTERVAL 12 HOUR) WHERE id = ?",
+            [$newScheduleJson, json_encode($scores), $existingId]);
+        dbQuery("DELETE FROM collab_score_updates WHERE session_id = ?", [$existingId]);
+    } else {
+        error_log("COLLAB_CREATE: Found existing session (same schedule), code=" . $existingSession['share_code']);
+        dbQuery("UPDATE collab_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL 12 HOUR) WHERE id = ?", [$existingId]);
+    }
     echo json_encode([
         'status' => 'success',
         'share_code' => $existingSession['share_code'],
-        'session_id' => $existingSession['id'],
+        'session_id' => $existingId,
         'message' => 'Existing session found'
     ]);
     exit;

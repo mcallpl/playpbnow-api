@@ -23,12 +23,22 @@ if (empty($user_id))   { echo json_encode(['status' => 'error', 'message' => 'Us
 if (empty($new_name))  { echo json_encode(['status' => 'error', 'message' => 'Group name required']); exit; }
 
 try {
-    // Get current group
+    // Get current group. Ad-hoc rosters (Quick Match uses a synthetic
+    // "quick_<ts>" key with no DB row) have NO source group — that's not an
+    // error, it just means "create a new group from this roster" below.
+    // (Previously this hard-failed with "Group not found".)
     $group = dbGetRow("SELECT * FROM `groups` WHERE group_key = ?", [$group_key]);
-    if (!$group) { echo json_encode(['status' => 'error', 'message' => 'Group not found']); exit; }
 
-    $current_name = $group['name'];
-    $is_same_name = (strtolower($current_name) === strtolower($new_name));
+    // Court for a newly created group: inherit the source group's court, else
+    // default to the first court in the catalog (never leave it blank).
+    $source_court_id = $group && $group['court_id'] ? (int)$group['court_id'] : null;
+    if ($source_court_id === null) {
+        $firstCourt = dbGetRow("SELECT id FROM courts ORDER BY name ASC LIMIT 1");
+        $source_court_id = $firstCourt ? (int)$firstCourt['id'] : null;
+    }
+
+    $current_name = $group ? $group['name'] : null;
+    $is_same_name = $group && (strtolower($current_name) === strtolower($new_name));
 
     if ($is_same_name) {
         // ── OVERWRITE: sync roster to current group ──
@@ -62,8 +72,14 @@ try {
             $group_id = (int)$existing['id'];
             $target_key = $existing['group_key'];
 
-            dbQuery("UPDATE `groups` SET court_id = ?, updated_at = NOW() WHERE id = ?",
-                [$group['court_id'], $group_id]);
+            // Only retarget the court when the SOURCE group had one; an ad-hoc
+            // roster save must not clobber the existing group's court.
+            if ($group && $group['court_id']) {
+                dbQuery("UPDATE `groups` SET court_id = ?, updated_at = NOW() WHERE id = ?",
+                    [(int)$group['court_id'], $group_id]);
+            } else {
+                dbQuery("UPDATE `groups` SET updated_at = NOW() WHERE id = ?", [$group_id]);
+            }
 
             syncRoster($group_id, $players);
 
@@ -81,7 +97,7 @@ try {
             $new_group_id = dbInsert(
                 "INSERT INTO `groups` (name, group_key, owner_user_id, court_id, device_id, created_at, updated_at)
                  VALUES (?, ?, ?, ?, '', NOW(), NOW())",
-                [$new_name, $new_key, $user_id, $group['court_id']]
+                [$new_name, $new_key, $user_id, $source_court_id]
             );
 
             syncRoster($new_group_id, $players);

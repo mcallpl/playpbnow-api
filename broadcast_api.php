@@ -128,7 +128,7 @@ switch ($action) {
             $message = "{$smsBody} Details: {$broadcastUrl}";
 
             try {
-                $client->messages->create(['to' => $phone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
+                $client->messages->create($phone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
 
                 // Record recipient
                 dbInsert(
@@ -147,7 +147,7 @@ switch ($action) {
 
                 $sent++;
                 $sentNames[] = $player['first_name'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $failed++;
                 $failedNames[] = $player['first_name'] . ' (' . $e->getMessage() . ')';
                 error_log("Broadcast SMS send failed to player {$player['id']}: " . $e->getMessage());

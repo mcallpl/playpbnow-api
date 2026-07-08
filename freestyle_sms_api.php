@@ -89,10 +89,10 @@ switch ($action) {
             }
 
             try {
-                $client->messages->create(['to' => $phone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $smsBody]);
+                $client->messages->create($phone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $smsBody]);
                 $sent++;
                 $sentNames[] = $player['first_name'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $failed++;
                 $failedNames[] = $player['first_name'] . ' (' . $e->getMessage() . ')';
                 error_log("Freestyle SMS failed to player {$player['id']}: " . $e->getMessage());

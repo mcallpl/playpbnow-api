@@ -62,10 +62,10 @@ function promoteNextWaitlisted($invite_id) {
             $message = "{$playerName}, a spot opened up! You're IN for pickleball {$shortDate} {$shortTime} @ {$invite['court_name']}. See you there!";
 
             $client = new \Twilio\Rest\Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-            $client->messages->create(['to' => $phone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
+            $client->messages->create($phone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
 
             // Note: No credit deduction for waitlist promotions — it's part of the original invite cost
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             error_log("Waitlist promotion SMS failed for player {$next['player_id']}: " . $e->getMessage());
         }
     }
@@ -208,9 +208,9 @@ switch ($action) {
 
                     if ($notifyMsg) {
                         $client = new \Twilio\Rest\Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-                        $client->messages->create(['to' => $orgPhone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $notifyMsg]);
+                        $client->messages->create($orgPhone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $notifyMsg]);
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     error_log("Organizer notification SMS failed: " . $e->getMessage());
                 }
             }

@@ -170,7 +170,7 @@ switch ($action) {
                 continue;
             }
 
-            $responseUrl = "https://peoplestar.com/PlayPBNow/invite.html?code={$invite['match_code']}&player_id={$player['id']}";
+            $responseUrl = "https://playpbnow.com/invite.html?code={$invite['match_code']}&player_id={$player['id']}";
 
             // Keep SMS ultra-short to save Twilio costs. All details are on the web page.
             $shortDate = date('D M j', strtotime($invite['match_date']));
@@ -178,7 +178,11 @@ switch ($action) {
             $message = "{$player['first_name']}, pickleball {$shortDate} {$shortTime} @ {$invite['court_name']}. RSVP: {$responseUrl}";
 
             try {
-                $client->messages->create(['to' => $phone, 'from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
+                // Twilio SDK signature is create(string $to, array $options) —
+                // passing one combined array is a TypeError that (being an
+                // Error, not an Exception) escaped the catch below and killed
+                // the whole request with an empty 500.
+                $client->messages->create($phone, ['from' => TWILIO_PHONE_NUMBER, 'body' => $message]);
 
                 // Record invite response
                 dbInsert(
@@ -198,7 +202,9 @@ switch ($action) {
 
                 $sent++;
                 $sentNames[] = $player['first_name'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                // \Throwable (not \Exception): TypeError/Error must also be
+                // contained so one bad send can never blank the whole response.
                 $failed++;
                 $failedNames[] = $player['first_name'] . ' (' . $e->getMessage() . ')';
                 error_log("SMS send failed to player {$player['id']}: " . $e->getMessage());
@@ -345,7 +351,7 @@ switch ($action) {
                 continue;
             }
 
-            $responseUrl = "https://peoplestar.com/PlayPBNow/invite.html?code={$invite['match_code']}&player_id={$player['id']}";
+            $responseUrl = "https://playpbnow.com/invite.html?code={$invite['match_code']}&player_id={$player['id']}";
             $fullDate = date('l, F j', strtotime($invite['match_date']));
             $fullTime = date('g:i A', strtotime($invite['match_time']));
             $costDisplay = ($invite['cost'] && strtolower($invite['cost']) !== 'free') ? "Cost: {$invite['cost']}" : "No cost to play";

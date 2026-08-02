@@ -2,37 +2,31 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
 
-$user_id   = $_GET['user_id'] ?? '';
-$is_global = $_GET['is_global'] ?? 'false';
+// GLOBAL mode removed alongside the leaderboard's. It listed every session from
+// every organizer in the database, exposing their group names and session
+// titles. Sessions are now always the caller's own.
+// Prefer the session token over the spoofable user_id param.
+$user_id = pbnow_optional_user_id();
+if ($user_id === null) {
+    $user_id = $_GET['user_id'] ?? '';
+}
 
-$isGlobal = ($is_global === 'true' || $is_global === '1' || $is_global === 1);
-
-if (empty($user_id) && !$isGlobal) {
-    echo json_encode(['status' => 'error', 'message' => 'Missing user_id for MINE mode']);
+if (empty($user_id)) {
+    echo json_encode(['status' => 'error', 'message' => 'Missing user_id']);
     exit;
 }
 
-if ($isGlobal) {
-    $sessions = dbGetAll(
-        "SELECT s.id, s.user_id, s.title, g.name as `group`,
-                UNIX_TIMESTAMP(s.session_date) as timestamp, s.created_at
-         FROM sessions s
-         JOIN `groups` g ON s.group_id = g.id
-         ORDER BY s.session_date DESC",
-        []
-    );
-} else {
-    $sessions = dbGetAll(
-        "SELECT s.id, s.user_id, s.title, g.name as `group`,
-                UNIX_TIMESTAMP(s.session_date) as timestamp, s.created_at
-         FROM sessions s
-         JOIN `groups` g ON s.group_id = g.id
-         WHERE s.user_id = ?
-         ORDER BY s.session_date DESC",
-        [$user_id]
-    );
-}
+$sessions = dbGetAll(
+    "SELECT s.id, s.user_id, s.title, g.name as `group`,
+            UNIX_TIMESTAMP(s.session_date) as timestamp, s.created_at
+     FROM sessions s
+     JOIN `groups` g ON s.group_id = g.id
+     WHERE s.user_id = ?
+     ORDER BY s.session_date DESC",
+    [$user_id]
+);
 
 $formatted = [];
 foreach ($sessions as $s) {

@@ -37,7 +37,18 @@ if (!empty($sent_players)) {
     $group = dbGetRow("SELECT id FROM `groups` WHERE group_key = ?", [$group_key]);
     if (!$group) { echo json_encode(['status'=>'error','message'=>'Group not found']); exit; }
 
-    $rows = dbGetAll("SELECT player_key as id, first_name, gender FROM players WHERE group_id = ? ORDER BY first_name", [$group['id']]);
+    // Roster comes from player_group_memberships, not the legacy players.group_id
+    // column. A player added to a second group only ever gets a membership row,
+    // so the old query silently dropped them from generated schedules.
+    // Ordering stays on first_name to keep schedule output identical.
+    $rows = dbGetAll(
+        "SELECT p.player_key as id, p.first_name, p.gender
+         FROM players p
+         INNER JOIN player_group_memberships pgm ON pgm.player_id = p.id
+         WHERE pgm.group_id = ? AND p._deleted_at IS NULL
+         ORDER BY p.first_name",
+        [$group['id']]
+    );
     if (empty($rows)) { echo json_encode(['status'=>'success','schedule'=>[]]); exit; }
 
     foreach ($rows as $r) {

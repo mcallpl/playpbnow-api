@@ -387,9 +387,20 @@ switch ($action) {
                 [$invite_id, $player['id'], $phone, $message, $linkMessage]
             );
 
-            // Create invite_response as 'sending' (daemon will update to 'pending' on success)
+            // Status must be 'pending' — matching the Twilio path above. This
+            // previously inserted 'sending', which is NOT a member of
+            // invite_responses.status enum('pending','confirmed','interested',
+            // 'declined','waitlisted'). Under MySQL strict mode that throws
+            // "Data truncated for column 'status'", killing the whole endpoint
+            // mid-response after the text was already queued; the browser then
+            // failed to parse the truncated body and surfaced the opaque
+            // "The string did not match the expected pattern."
+            // (Before strict mode was enabled it silently wrote '' instead —
+            // that is the origin of the empty-status rows from April.)
+            // No daemon ever transitioned 'sending' to anything; the Mac sender
+            // reads text_queue, not this table.
             dbInsert(
-                "INSERT INTO invite_responses (invite_id, player_id, player_phone, player_name, status) VALUES (?, ?, ?, ?, 'sending')",
+                "INSERT INTO invite_responses (invite_id, player_id, player_phone, player_name, status) VALUES (?, ?, ?, ?, 'pending')",
                 [$invite_id, $player['id'], $phone, $player['first_name']]
             );
 

@@ -135,7 +135,15 @@ if (!empty($new_names)) {
         if (empty($new_name) || empty($player_key)) continue;
         
         $conn = getDBConnection();
-        $stmt = $conn->prepare("UPDATE players SET first_name = ? WHERE group_id = ? AND player_key = ?");
+        // Scope the rename through player_group_memberships rather than the
+        // legacy players.group_id column — renaming a player in a group they
+        // joined via membership was previously a silent no-op.
+        $stmt = $conn->prepare(
+            "UPDATE players p
+             INNER JOIN player_group_memberships pgm ON pgm.player_id = p.id
+             SET p.first_name = ?
+             WHERE pgm.group_id = ? AND p.player_key = ?"
+        );
         $stmt->bind_param('sis', $new_name, $group_id, $player_key);
         $stmt->execute();
         $stmt->close();

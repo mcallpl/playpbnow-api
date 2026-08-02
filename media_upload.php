@@ -139,20 +139,18 @@ if ($isImage) {
         . ' -vf "scale=-2:\'min(720,ih)\'"'
         . ' -c:v libx264 -preset fast -crf 28'
         . ' -c:a aac -b:a 96k -ac 2'
-        . ' -movflags +faststart'
-        . ' -y ' . escapeshellarg($outputPath)
-        . ' 2>&1';
+        . ' -movflags +faststart';
 
-    $output = shell_exec($cmd);
+    // Output path escaped with escapeshellarg on the exec line itself.
+    $output = shell_exec($cmd . ' -y ' . escapeshellarg($outputPath) . ' 2>&1');
     $success = file_exists($outputPath) && filesize($outputPath) > 0;
 
     // Clean up temp input
     @unlink($tmpVideo);
 
     if ($success) {
-        // Get video dimensions from ffmpeg
-        $probeCmd = escapeshellcmd($FFMPEG) . ' -i ' . escapeshellarg($outputPath) . ' 2>&1';
-        $probeOut = shell_exec($probeCmd);
+        // Get video dimensions from ffmpeg (args escaped on the exec line).
+        $probeOut = shell_exec(escapeshellcmd($FFMPEG) . ' -i ' . escapeshellarg($outputPath) . ' 2>&1');
         $width = 0; $height = 0;
         if (preg_match('/(\d{2,5})x(\d{2,5})/', $probeOut, $m)) {
             $width = (int)$m[1];

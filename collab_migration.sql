@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS `collab_score_updates` (
 
 -- ============================================
 -- Also add share_code to existing sessions table (if not already there)
--- This was already in your schema, so this is just a safety check
+-- This was already in your schema, so this is just a safety check.
+-- NOTE: MySQL 8 does NOT support `ADD COLUMN IF NOT EXISTS` (that is MariaDB
+-- syntax and fatals on MySQL 8). The MySQL-8-safe, idempotent pattern is an
+-- information_schema guard. Uncomment to run:
 -- ============================================
--- ALTER TABLE `sessions` ADD COLUMN IF NOT EXISTS `share_code` varchar(6) DEFAULT NULL;
+-- SET @has_share_code := (
+--   SELECT COUNT(*) FROM information_schema.COLUMNS
+--   WHERE TABLE_SCHEMA = DATABASE()
+--     AND TABLE_NAME  = 'sessions'
+--     AND COLUMN_NAME = 'share_code'
+-- );
+-- SET @ddl := IF(@has_share_code = 0,
+--   'ALTER TABLE `sessions` ADD COLUMN `share_code` varchar(6) DEFAULT NULL',
+--   'DO 0');
+-- PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

@@ -4,6 +4,7 @@ ini_set('display_errors', '0');
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/trial.php';
 
 try {
     $input = json_decode(file_get_contents('php://input'), true);
@@ -70,6 +71,10 @@ dbInsert(
      VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?)",
     [$group_id, $batch_id, $share_code, $group_name, $user_id, count($players), $male_count, $female_count]
 );
+
+// First meaningful use — starting a live session counts the same as saving
+// scores. No-op once the trial is already running.
+pbnow_start_trial_on_first_use($user_id);
 
 // Create empty match placeholders for the schedule
 foreach ($schedule as $roundIdx => $round) {

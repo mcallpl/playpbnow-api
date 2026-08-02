@@ -49,8 +49,11 @@ if (!$user) {
     $now_str = date('Y-m-d H:i:s');
 
     $user_id = dbInsert(
-        "INSERT INTO users (phone, is_active, last_login_at, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, TRUE, NOW(), 'trial', 'pro', ?, ?)",
-        [$clean_phone, $now_str, $trial_end]
+        "INSERT INTO users (phone, is_active, last_login_at, subscription_status, subscription_tier, trial_start_date, subscription_end_date)         // Trial clock starts on FIRST MEANINGFUL USE (first saved session),
+        // not at registration — see trial.php. NULLs are what mark it unstarted;
+        // every expiry check is guarded on subscription_end_date.
+VALUES (?, TRUE, NOW(), 'trial', 'pro', NULL, NULL)",
+        [$clean_phone]
     );
 
     // Create feature_access row with full Pro access for trial

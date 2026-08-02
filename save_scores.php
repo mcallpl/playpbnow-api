@@ -26,6 +26,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/trial.php';
 
 try {
 
@@ -136,6 +137,10 @@ if (!$existingSession || !$force_update) {
         echo json_encode(['status' => 'error', 'message' => 'Could not create session']);
         exit;
     }
+
+    // First meaningful use: a match has been played and saved. Start the trial
+    // clock here rather than at registration. No-op once it is already running.
+    pbnow_start_trial_on_first_use($user_id);
 }
 
 // ── 5. Save individual matches ───────────────────────────────

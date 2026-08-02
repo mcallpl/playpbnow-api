@@ -76,8 +76,11 @@ if (!$user) {
     $device_id = 'claim_' . bin2hex(random_bytes(8)); // users.device_id is NOT NULL
     $user_id = dbInsert(
         "INSERT INTO users (device_id, phone, is_active, last_login_at, subscription_status, subscription_tier, trial_start_date, subscription_end_date)
-         VALUES (?, ?, TRUE, NOW(), 'trial', 'premium', ?, ?)",
-        [$device_id, $clean_phone, $now_str, $trial_end]
+        // Trial clock starts on FIRST MEANINGFUL USE (first saved session),
+        // not at registration — see trial.php. NULLs are what mark it unstarted;
+        // every expiry check is guarded on subscription_end_date.
+         VALUES (?, ?, TRUE, NOW(), 'trial', 'premium', NULL, NULL)",
+        [$device_id, $clean_phone]
     );
     try {
         dbQuery(

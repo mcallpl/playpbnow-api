@@ -9,6 +9,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/trial.php';
 
 // Default free tier features (used as fallback if DB queries fail)
 $default_features = [
@@ -96,8 +97,18 @@ try {
         }
     }
 
-    // Calculate trial days remaining
-    if ($status === 'trial' && $end_date) {
+    // Calculate trial days remaining.
+    //
+    // A 'trial' user with no trial_start_date has not begun their trial: the
+    // clock starts on first meaningful use (first saved session — see
+    // trial.php). Report the FULL allowance rather than falling through to 0,
+    // which would otherwise render as "0 days remaining" and read like an
+    // expired account to someone who has not started yet.
+    $trial_started = ($trial_start !== null);
+
+    if ($status === 'trial' && !$trial_started) {
+        $trial_days_remaining = pbnow_trial_days();
+    } elseif ($status === 'trial' && $end_date) {
         $remaining_seconds = strtotime($end_date) - $now;
         $trial_days_remaining = max(0, ceil($remaining_seconds / 86400));
     }
@@ -126,6 +137,7 @@ try {
             'subscriptionStatus' => $status,
             'expiryDate' => $end_date,
             'trialStartDate' => $trial_start,
+            'trialStarted' => $trial_started,
             'trialDaysRemaining' => $trial_days_remaining,
             'trialExpired' => ($status === 'expired' && $trial_start !== null),
             'isPro' => $can_clean_reports || $is_admin,

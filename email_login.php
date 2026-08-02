@@ -91,8 +91,11 @@ if ($mode === 'register') {
     $device_id = bin2hex(random_bytes(16)); // Generate unique device_id
 
     $user_id = dbInsert(
-        "INSERT INTO users (device_id, phone, email, password_hash, first_name, last_name, is_active, subscription_status, subscription_tier, trial_start_date, subscription_end_date) VALUES (?, ?, ?, ?, ?, ?, 1, 'trial', 'premium', ?, ?)",
-        [$device_id, $phone ?: null, $email, $password_hash, $first_name, $last_name, $now_str, $trial_end]
+        "INSERT INTO users (device_id, phone, email, password_hash, first_name, last_name, is_active, subscription_status, subscription_tier, trial_start_date, subscription_end_date)         // Trial clock starts on FIRST MEANINGFUL USE (first saved session),
+        // not at registration — see trial.php. NULLs are what mark it unstarted;
+        // every expiry check is guarded on subscription_end_date.
+VALUES (?, ?, ?, ?, ?, ?, 1, 'trial', 'premium', NULL, NULL)",
+        [$device_id, $phone ?: null, $email, $password_hash, $first_name, $last_name]
     );
 
     if (!$user_id) {

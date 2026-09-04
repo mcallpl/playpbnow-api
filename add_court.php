@@ -20,12 +20,16 @@ $address = trim($input['address'] ?? '');
 
 if (empty($name))    { echo json_encode(['status' => 'error', 'message' => 'Court name required']); exit; }
 if (empty($city))    { echo json_encode(['status' => 'error', 'message' => 'City required']); exit; }
-if (empty($address)) { echo json_encode(['status' => 'error', 'message' => 'Address required']); exit; }
+// M14: address is OPTIONAL. The Groups "Add Court" form never sends one, so
+// this hard requirement made every add fail. Geocoding falls back to
+// "name, city, state" when no street address is given.
+// (was: if (empty($address)) { ... 'Address required' ... })
 
 // Geocode the address using Google Maps API
 function geocodeAddress($name, $address, $city, $state) {
     $apiKey = GOOGLE_MAPS_API_KEY;
-    $fullAddress = urlencode("$name, $address, $city, $state");
+    $parts = array_filter([$name, $address, $city, $state], function ($p) { return $p !== null && trim((string)$p) !== ''; });
+    $fullAddress = urlencode(implode(', ', $parts));
     $url = "https://maps.googleapis.com/maps/api/geocode/json?address=$fullAddress&key=$apiKey";
 
     $response = file_get_contents($url);
@@ -72,7 +76,7 @@ try {
     $court_id = dbInsert(
         "INSERT INTO courts (name, city, state, address, lat, lng, created_by_user_id, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())",
-        [$name, $city, $state ?: null, $address, $coords['lat'], $coords['lng'], $user_id]
+        [$name, $city, $state ?: null, $address !== '' ? $address : null, $coords['lat'], $coords['lng'], $user_id]
     );
 
     echo json_encode([

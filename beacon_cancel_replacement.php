@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -10,11 +10,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once 'db_config.php';
+require_once 'beacon_common.php'; // H1 session adoption + H2 ISO dates
 
 $input = json_decode(file_get_contents('php://input'), true);
 
 $request_id = $input['replacement_request_id'] ?? null;
 $user_id = $input['user_id'] ?? null;
+
+// H1: a valid session token overrides the client-supplied user id.
+$user_id = beacon_adopt_session_user($user_id);
+$user_id = $user_id !== null ? (string)$user_id : null;
 
 if (!$request_id || !$user_id) {
     echo json_encode(['status' => 'error', 'message' => 'replacement_request_id and user_id are required']);
@@ -36,7 +41,7 @@ if (!$request) {
     exit;
 }
 
-if ($request['departing_user_id'] !== $user_id) {
+if ((string)$request['departing_user_id'] !== (string)$user_id) {
     $conn->close();
     echo json_encode(['status' => 'error', 'message' => 'You can only cancel your own replacement request']);
     exit;

@@ -3,17 +3,56 @@
 // Receives subscription events and updates user subscription status
 header('Content-Type: application/json');
 
-// Verify webhook authorization
-$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-$expectedToken = defined('REVENUECAT_WEBHOOK_SECRET') ? REVENUECAT_WEBHOOK_SECRET : '';
+// ── Webhook authorization (hardened during the UAT pass, 2026-09-04) ──────
+//
+// This check used to run BEFORE db_config.php was loaded, and the constant it
+// looked for was never defined anywhere, so $expectedToken was always '' and
+// the `if` never fired. The endpoint accepted any anonymous POST, and an
+// INITIAL_PURCHASE event naming any users.id granted that account a
+// subscription with a NULL end date — which no expiry check ever revokes.
+//
+// It is now checked properly, but deliberately NOT fail-closed yet: no
+// RevenueCat secret exists in the vault today and the dashboard sends no
+// Authorization header, so refusing unsigned calls would silently stop every
+// real purchase from activating. Until the secret is in place the call is
+// still honoured and every request is logged loudly.
+//
+// TO SECURE IT (two steps, either order):
+//   1. Add $vault_revenuecat_webhook_secret = '<random string>'; to
+//      /var/www/html/vault/secrets.php
+//   2. In the RevenueCat dashboard set the webhook's Authorization header to
+//      "Bearer <that same string>"
+// Once step 1 lands, unsigned calls are rejected automatically.
+require_once __DIR__ . '/db_config.php';
 
-if ($expectedToken && $authHeader !== 'Bearer ' . $expectedToken) {
-    http_response_code(401);
-    echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
-    exit;
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+
+$expectedToken = '';
+if (defined('REVENUECAT_WEBHOOK_SECRET')) {
+    $expectedToken = (string)REVENUECAT_WEBHOOK_SECRET;
+}
+if ($expectedToken === '') {
+    foreach (['/var/www/html/vault/secrets.php', __DIR__ . '/../vault/secrets.php'] as $vaultPath) {
+        if (is_readable($vaultPath)) {
+            include_once $vaultPath;
+            break;
+        }
+    }
+    if (isset($vault_revenuecat_webhook_secret) && $vault_revenuecat_webhook_secret !== '') {
+        $expectedToken = (string)$vault_revenuecat_webhook_secret;
+    }
 }
 
-require_once __DIR__ . '/db_config.php';
+if ($expectedToken !== '') {
+    if (!hash_equals('Bearer ' . $expectedToken, $authHeader)) {
+        error_log('revenuecat_webhook: REJECTED request with bad/missing Authorization header');
+        http_response_code(401);
+        echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+        exit;
+    }
+} else {
+    error_log('revenuecat_webhook: NO $vault_revenuecat_webhook_secret in vault — this endpoint is currently UNAUTHENTICATED. See the header comment in revenuecat_webhook.php.');
+}
 
 $input = json_decode(file_get_contents('php://input'), true);
 

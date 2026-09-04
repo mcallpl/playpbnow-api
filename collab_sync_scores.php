@@ -108,6 +108,14 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    // Audit C L8: activity extends the session so joins are never refused
+    // while scores are still being entered. Only ever extends.
+    $stmt = $conn->prepare(
+        "UPDATE collab_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL 2 HOUR)
+         WHERE id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at < DATE_ADD(NOW(), INTERVAL 1 HOUR))"
+    );
+    if ($stmt) { $stmt->bind_param('i', $sid); $stmt->execute(); $stmt->close(); }
+
     $conn->commit();
     echo json_encode(['status' => 'success']);
 } catch (Throwable $e) {

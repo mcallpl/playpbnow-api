@@ -91,10 +91,14 @@ if ($mode === 'register') {
     $device_id = bin2hex(random_bytes(16)); // Generate unique device_id
 
     $user_id = dbInsert(
-        "INSERT INTO users (device_id, phone, email, password_hash, first_name, last_name, is_active, subscription_status, subscription_tier, trial_start_date, subscription_end_date)         // Trial clock starts on FIRST MEANINGFUL USE (first saved session),
+        // Trial clock starts on FIRST MEANINGFUL USE (first saved session),
         // not at registration — see trial.php. NULLs are what mark it unstarted;
         // every expiry check is guarded on subscription_end_date.
-VALUES (?, ?, ?, ?, ?, ?, 1, 'trial', 'premium', NULL, NULL)",
+        // NOTE: this comment must stay OUTSIDE the SQL string. It was once
+        // pasted inside it and every registration failed with a SQL syntax
+        // error (UAT 2026-09-04).
+        "INSERT INTO users (device_id, phone, email, password_hash, first_name, last_name, is_active, subscription_status, subscription_tier, trial_start_date, subscription_end_date)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 'trial', 'premium', NULL, NULL)",
         [$device_id, $phone ?: null, $email, $password_hash, $first_name, $last_name]
     );
 

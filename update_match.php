@@ -7,7 +7,14 @@
 // ============================================
 
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: https://peoplestar.com');
+// The app is served from playpbnow.com (same-origin) and legacy hosts; a
+// peoplestar.com-only allow-origin made the browser drop the response
+// everywhere else (Audit C H7). Authentication is the Bearer token, not the
+// origin, so '*' is safe here.
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/require_admin.php';
@@ -32,8 +39,22 @@ if (!$match_id || !$group_key) {
     exit;
 }
 
-// Resolve group_id - try by group_key first, then fall back to name
-$group = dbGetRow("SELECT id FROM `groups` WHERE group_key = ? OR name = ?", [$group_key, $group_key]);
+// Resolve group_id - try by group_key first, then fall back to name.
+// Audit C M12 / Audit E M15: the lookup is OWNER-SCOPED. Without it, two
+// organizers who both have a group called "Tuesday" resolved to whichever
+// row came first, and the wrong organizer's match could be edited.
+$group = dbGetRow(
+    "SELECT id FROM `groups` WHERE (group_key = ? OR name = ?) AND owner_user_id = ? AND _deleted_at IS NULL ORDER BY id ASC LIMIT 1",
+    [$group_key, $group_key, $auth_uid]
+);
+if (!$group) {
+    // Legacy rows that predate owner_user_id — the session ownership check
+    // below still protects them.
+    $group = dbGetRow(
+        "SELECT id FROM `groups` WHERE (group_key = ? OR name = ?) AND (owner_user_id IS NULL OR owner_user_id = 0 OR owner_user_id = '') ORDER BY id ASC LIMIT 1",
+        [$group_key, $group_key]
+    );
+}
 if (!$group) {
     echo json_encode(['status' => 'error', 'message' => 'Group not found']);
     exit;
@@ -55,6 +76,20 @@ if (!empty($match['device_id']) && (string) $match['device_id'] !== (string) $au
 }
 
 $session_id = $match['session_id'] ?? null;
+
+// Ownership via the session (Audit C M7): matches.device_id is always '' in
+// practice, so the real owner is sessions.user_id.
+if (!empty($session_id) && ctype_digit((string)$session_id)) {
+    $sessOwner = dbGetRow("SELECT user_id FROM sessions WHERE id = ?", [(int)$session_id]);
+    if ($sessOwner && !empty($sessOwner['user_id']) && (string)$sessOwner['user_id'] !== (string)$auth_uid) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'You can only edit matches you created']);
+        exit;
+    }
+}
+
+// Players whose cached stats must be recalculated after the edit.
+$affectedKeys = function_exists('pbnow_match_rows_player_keys') ? pbnow_match_rows_player_keys([$match]) : [];
 
 // Gather inputs
 $p1_id = $input['p1'] ?? '';
@@ -151,8 +186,16 @@ if (!empty($new_names)) {
     }
 }
 
+// Recalculate players.wins/losses/diff/win_pct for everyone in this match
+// (Audit C M6 — previously only save_scores ever refreshed them).
+$stats_updated = 0;
+if (!empty($affectedKeys) && function_exists('pbnow_recalc_player_stats')) {
+    $stats_updated = pbnow_recalc_player_stats($affectedKeys);
+}
+
 echo json_encode([
     'status'  => 'success',
-    'message' => 'Match updated'
+    'message' => 'Match updated',
+    'stats_updated' => $stats_updated
 ]);
 ?>

@@ -33,11 +33,17 @@ foreach ($sessions as $s) {
     $date = date('M j, Y g:i A', $s['timestamp']);
     $isYours = (strval($s['user_id']) === strval($user_id));
     
+    // Audit E LOW: `??` only catches NULL — an EMPTY title produced a label
+    // that began with " - ". Fall back to the group name for '' as well.
+    $titleForLabel = (isset($s['title']) && trim((string)$s['title']) !== '') ? $s['title'] : $s['group'];
+    if ($titleForLabel === null || trim((string)$titleForLabel) === '') $titleForLabel = 'Session';
+
     $formatted[] = [
         'id' => (string)$s['id'],  // Use sessions.id (numeric), cast to string for frontend
         'group' => $s['group'],
+        'title' => $titleForLabel,
         'timestamp' => (int)$s['timestamp'],
-        'label' => ($s['title'] ?? $s['group']) . " - {$date}",
+        'label' => $titleForLabel . " - {$date}",
         'user_id' => $s['user_id'],
         'isYours' => $isYours
     ];

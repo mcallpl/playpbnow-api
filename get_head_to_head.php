@@ -6,6 +6,15 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
+// ── DISABLED (UAT 2026-09-04, Audit E H6) ─────────────────────────────
+// Reads the LEGACY flat-file store (pickleball_data.json) with no
+// authentication; the app's head-to-head is computed client-side from
+// get_leaderboard.php history (hooks/useHeadToHead.ts). Hard 403; the
+// original code is kept below, unreachable, per the additive-only rule.
+http_response_code(403);
+echo json_encode(['status' => 'error', 'message' => 'This legacy endpoint is disabled.']);
+exit;
+
 // 1. GET PARAMS
 $group_name = $_GET['group'] ?? '';
 $p1_query = strtolower(trim($_GET['p1'] ?? '')); // Expecting lowercase name or ID

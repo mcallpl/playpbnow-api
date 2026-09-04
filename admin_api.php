@@ -3,7 +3,8 @@
  * Admin Dashboard API — Stats, management, and analytics
  */
 
-header('Access-Control-Allow-Origin: https://peoplestar.com');
+require_once __DIR__ . '/cors_origin.php';
+pbnow_send_cors_headers(); // was: hard-coded legacy origin only (UAT 2026-09-04)
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');

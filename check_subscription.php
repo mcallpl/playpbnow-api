@@ -52,6 +52,8 @@ try {
                 'trialDaysRemaining' => 0,
                 'trialExpired' => false,
                 'isPro' => false,
+                'hasAccess' => false,
+                'isPaid' => false,
             ],
             'features' => [
                 'canGenerateCleanReports' => false,
@@ -130,6 +132,22 @@ try {
 
     $is_admin = (bool)($user['is_admin'] ?? false);
 
+    // ── Paid vs. trial (UAT 2026-09-04) ───────────────────────────────────
+    // The wire field `isPro` has ALWAYS meant "may use Pro features", which
+    // includes an active trial, and the build currently in the App Store
+    // gates its features on it. Changing that meaning would strip Pro
+    // features from every trial user still on 1.4.5, so it stays exactly as
+    // it was. Two explicit fields are ADDED beside it:
+    //
+    //   hasAccess — paid OR trial OR admin  (gate FEATURES on this)
+    //   isPaid    — genuinely paying        (gate PURCHASE UI on !isPaid)
+    //
+    // Before this, the paywall hid its buy buttons whenever isPro was true,
+    // so a trial user was shown "You're a Pro member" and had no way to
+    // subscribe — they had to let the trial lapse first.
+    $has_access = $can_clean_reports || $is_admin;
+    $is_paid = (!$is_expired && $status === 'active') || ($tier === 'pro' && $status !== 'trial');
+
     echo json_encode([
         'status' => 'success',
         'subscription' => [
@@ -139,8 +157,10 @@ try {
             'trialStartDate' => $trial_start,
             'trialStarted' => $trial_started,
             'trialDaysRemaining' => $trial_days_remaining,
-            'trialExpired' => ($status === 'expired' && $trial_start !== null),
-            'isPro' => $can_clean_reports || $is_admin,
+            'trialExpired' => ($status === 'expired' && $trial_start !== null && !$is_paid),
+            'isPro' => $has_access,
+            'hasAccess' => $has_access,
+            'isPaid' => $is_paid || $is_admin,
             'isAdmin' => $is_admin,
         ],
         'features' => [
@@ -166,6 +186,8 @@ try {
             'trialDaysRemaining' => 0,
             'trialExpired' => false,
             'isPro' => false,
+            'hasAccess' => false,
+            'isPaid' => false,
         ],
         'features' => [
             'canGenerateCleanReports' => false,

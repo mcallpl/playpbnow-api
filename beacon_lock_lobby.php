@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -10,11 +10,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once 'db_config.php';
+require_once 'beacon_common.php'; // H1 session adoption + H2 ISO dates
+require_once 'beacon_schedule.php'; // H4: shared generateSchedule / calculateMatchQuality
 
 // Parse input
 $input = json_decode(file_get_contents('php://input'), true);
 $lobby_id = $input['lobby_id'] ?? null;
 $host_user_id = $input['host_user_id'] ?? null;
+
+// H1: a valid session token overrides the client-supplied host id.
+$host_user_id = beacon_adopt_session_user($host_user_id);
+$host_user_id = $host_user_id !== null ? (string)$host_user_id : null;
 
 if (!$lobby_id || !$host_user_id) {
     echo json_encode(['status' => 'error', 'message' => 'lobby_id and host_user_id are required']);
@@ -43,7 +49,7 @@ if ($lobby['status'] !== 'gathering') {
 }
 
 // 2. Verify caller is the host
-if ($lobby['host_user_id'] !== $host_user_id) {
+if ((string)$lobby['host_user_id'] !== (string)$host_user_id) {
     $conn->close();
     echo json_encode(['status' => 'error', 'message' => 'Only the host can lock the lobby']);
     exit;
@@ -85,15 +91,8 @@ if (count($members) < 2) {
     exit;
 }
 
-// 5. Build players array for schedule generation
-$players = [];
-foreach ($members as $member) {
-    $players[] = [
-        'id' => $member['player_id'] ? (string)$member['player_id'] : $member['user_id'],
-        'first_name' => $member['first_name'] ?? 'Player',
-        'gender' => $member['gender'] ?? 'unknown'
-    ];
-}
+// 5. Build players array for schedule generation (shared helper — always has id)
+$players = beacon_schedule_players($members);
 
 // 6. Generate schedule_json (round-robin matchups)
 $schedule = generateSchedule($players);
@@ -112,14 +111,40 @@ $stmt->bind_param('sii', $schedule_json, $match_quality, $lobby_id);
 $stmt->execute();
 $stmt->close();
 
+// M7: a locked match must not have its beacon expire underneath it — give the
+// beacon at least 2 more hours from now (never shortens an existing expiry)
+// and re-activate it if it lapsed while the lobby was gathering.
+$beacon_id = (int)$lobby['beacon_id'];
+$stmt = $conn->prepare(
+    "UPDATE beacons
+     SET expires_at = GREATEST(expires_at, DATE_ADD(NOW(), INTERVAL 120 MINUTE)),
+         status = 'active'
+     WHERE id = ? AND status IN ('active', 'expired')"
+);
+$stmt->bind_param('i', $beacon_id);
+$stmt->execute();
+$stmt->close();
+
+$stmt = $conn->prepare("SELECT expires_at FROM beacons WHERE id = ?");
+$stmt->bind_param('i', $beacon_id);
+$stmt->execute();
+$beaconRow = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
 $conn->close();
 
 echo json_encode([
     'status' => 'success',
     'schedule_json' => $schedule,
-    'match_quality_percent' => $match_quality
+    'match_quality_percent' => $match_quality,
+    'beacon_expires_at' => $beaconRow['expires_at'] ?? null,
+    'beacon_expires_at_iso' => beacon_iso($beaconRow['expires_at'] ?? null),
+    'beacon_expires_in_sec' => beacon_expires_in_sec($beaconRow['expires_at'] ?? null),
 ]);
 
+// The original per-file implementations are kept below as a fallback; the
+// shared beacon_schedule.php copies (loaded above) are the ones that run.
+if (!function_exists('generateSchedule')) {
 /**
  * Generate round-robin schedule from player list.
  */
@@ -201,7 +226,9 @@ function generateSchedule(array $players): array {
 
     return $schedule;
 }
+}
 
+if (!function_exists('calculateMatchQuality')) {
 /**
  * Calculate match quality percentage based on player heuristics.
  */
@@ -240,4 +267,5 @@ function calculateMatchQuality(array $members): int {
     }
 
     return min($quality, 100);
+}
 }

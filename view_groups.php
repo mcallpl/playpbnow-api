@@ -5,6 +5,16 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
+// ── DISABLED (UAT 2026-09-04, Audit E H6) ─────────────────────────────
+// This endpoint reads the LEGACY flat-file store (pickleball_data.json) with
+// no authentication and is not called by the app (everything is in MySQL
+// now). It returned every group name and player name in the file to anyone.
+// Hard 403 here; the original code is kept below, unreachable, per the
+// additive-only rule. Remove this block only with Chip's explicit OK.
+http_response_code(403);
+echo json_encode(['status' => 'error', 'message' => 'This legacy endpoint is disabled.']);
+exit;
+
 $file = __DIR__ . '/pickleball_data.json';
 
 if (!file_exists($file)) {

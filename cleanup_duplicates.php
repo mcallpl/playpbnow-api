@@ -6,15 +6,35 @@
 // keeps the one with the most matches (or lowest ID as tiebreaker),
 // merges all others into it, and deletes the duplicates.
 //
-// Usage:
-//   GET  ?dry_run=1   — preview what would be merged (safe)
-//   GET  (no params)  — actually perform the merges
+// Usage (Audit E C1 — was an unauthenticated GET that dumped every player's
+// phone and merged rosters ACROSS organizers):
+//   ADMIN ONLY (Authorization: Bearer <admin session>), POST ONLY.
+//   POST ?dry_run=1  or  body {"dry_run":1}  — preview what would be merged (safe)
+//   POST (no dry_run)                        — actually perform the merges
+// Phone numbers are never included in the output.
 // ============================================
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit(); }
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
 
-$dry_run = isset($_GET['dry_run']) && $_GET['dry_run'] == '1';
+// Admin session required — exits 401/403 otherwise.
+$admin_uid = require_admin();
+
+// POST only: a bare GET used to run the merge for real.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['status' => 'error', 'message' => 'POST required']);
+    exit;
+}
+
+$__body = json_decode(file_get_contents('php://input'), true);
+if (!is_array($__body)) $__body = [];
+$dry_run = (isset($_GET['dry_run']) && $_GET['dry_run'] == '1')
+        || (isset($__body['dry_run']) && ($__body['dry_run'] == '1' || $__body['dry_run'] === true));
 
 try {
     $conn = getDBConnection();
@@ -75,7 +95,8 @@ try {
                 'matches' => $playerMatchCounts[$keepId],
                 'wins' => (int)$keepPlayer['wins'],
                 'losses' => (int)$keepPlayer['losses'],
-                'phone' => $keepPlayer['cell_phone'],
+                // 'phone' removed from output (Audit E C1) — only whether one exists.
+                'has_phone' => !empty($keepPlayer['cell_phone']),
                 'last_name' => $keepPlayer['last_name'],
             ],
             'merge_into_keep' => [],
@@ -92,7 +113,8 @@ try {
                 'matches' => $playerMatchCounts[$mergeId],
                 'wins' => (int)$mergePlayer['wins'],
                 'losses' => (int)$mergePlayer['losses'],
-                'phone' => $mergePlayer['cell_phone'],
+                // 'phone' removed from output (Audit E C1) — only whether one exists.
+                'has_phone' => !empty($mergePlayer['cell_phone']),
                 'last_name' => $mergePlayer['last_name'],
             ];
 

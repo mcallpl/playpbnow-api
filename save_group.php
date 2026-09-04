@@ -4,6 +4,15 @@ header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 
+// ── DISABLED (UAT 2026-09-04, Audit E H6) ─────────────────────────────
+// WROTE to the LEGACY flat-file store (pickleball_data.json) with no
+// authentication — anyone could overwrite any group's roster. Not used by
+// the app (create_group.php / add_player.php are the live paths). Hard 403;
+// the original code is kept below, unreachable, per the additive-only rule.
+http_response_code(403);
+echo json_encode(['status' => 'error', 'message' => 'This legacy endpoint is disabled.']);
+exit;
+
 $input = json_decode(file_get_contents('php://input'), true);
 $group_name = $input['group_name'] ?? '';
 $players = $input['players'] ?? []; 

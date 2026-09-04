@@ -6,21 +6,42 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
+if (!is_array($input)) $input = [];
 $name     = trim($input['name'] ?? '');
 $user_id  = $input['user_id'] ?? '';
 $court_id = isset($input['court_id']) ? (int)$input['court_id'] : null;
+
+// WRITE endpoint: a session token, when present, is the identity; the body
+// user_id is only honoured for older clients that send no token.
+$session_uid = pbnow_optional_user_id();
+if ($session_uid !== null) {
+    $user_id = $session_uid;
+}
 
 if (empty($name))    { echo json_encode(['status' => 'error', 'message' => 'Group name required']); exit; }
 if (empty($user_id)) { echo json_encode(['status' => 'error', 'message' => 'User ID required']); exit; }
 
 try {
+    // Only live groups count as "existing"; a soft-deleted group with the same
+    // name must not be silently resurrected (delete_group.php soft-deletes).
     $existing = dbGetRow(
-        "SELECT * FROM `groups` WHERE name = ? AND owner_user_id = ?",
+        "SELECT * FROM `groups` WHERE name = ? AND owner_user_id = ? AND _deleted_at IS NULL ORDER BY id ASC LIMIT 1",
         [$name, $user_id]
     );
-    
+    if (!$existing) {
+        // Fallback in case _deleted_at does not exist on this schema.
+        $existing = dbGetRow(
+            "SELECT * FROM `groups` WHERE name = ? AND owner_user_id = ? ORDER BY id ASC LIMIT 1",
+            [$name, $user_id]
+        );
+        if ($existing && array_key_exists('_deleted_at', $existing) && $existing['_deleted_at'] !== null) {
+            $existing = null;   // soft-deleted — treat as not existing
+        }
+    }
+
     if ($existing) {
         // Update existing — also update court_id if provided
         $conn = getDBConnection();
@@ -34,10 +55,14 @@ try {
         $stmt->execute();
         $stmt->close();
         $conn->close();
-        
+
+        // Audit E M2: the name already exists for this owner. Say so with
+        // status 'exists' + a message so the app can tell the organizer,
+        // but STILL return the group so older clients keep working.
         echo json_encode([
-            'status' => 'success',
-            'message' => 'Group already exists - updated',
+            'status' => 'exists',
+            'exists' => true,
+            'message' => "You already have a group called \"{$name}\". Opening it instead.",
             'group' => [
                 'id' => $existing['id'],
                 'name' => $existing['name'],
@@ -74,7 +99,8 @@ try {
     if (strpos($e->getMessage(), 'Duplicate entry') !== false) {
         $existing = dbGetRow("SELECT * FROM `groups` WHERE name = ? AND owner_user_id = ?", [$name, $user_id]);
         echo json_encode([
-            'status' => 'success', 'message' => 'Group already exists',
+            'status' => 'exists', 'exists' => true,
+            'message' => "You already have a group called \"{$name}\". Opening it instead.",
             'group' => ['id' => $existing['id'], 'name' => $existing['name'], 'group_key' => $existing['group_key'], 'court_id' => $existing['court_id']]
         ]);
     } else {

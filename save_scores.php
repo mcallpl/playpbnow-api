@@ -46,28 +46,88 @@ $match_title      = $input['match_title'] ?? $group_name;
 $force_update     = $input['force_update'] ?? false;
 $share_code_input = strtoupper(trim($input['share_code'] ?? ''));
 
+// Session metadata the client has been sending since the fixed-teams /
+// tournament feature shipped but the server never stored (Audit C M5,
+// Audit E H4). get_leaderboard.php returns them as `session_meta`.
+$is_fixed_teams        = !empty($input['is_fixed_teams']) ? 1 : 0;
+$tournament_placements = $input['tournament_placements'] ?? null;
+if ($tournament_placements !== null && !is_string($tournament_placements)) {
+    $tournament_placements = json_encode($tournament_placements);
+}
+if ($tournament_placements === '' || $tournament_placements === '[]' || $tournament_placements === 'null') {
+    $tournament_placements = null;
+}
+
 if (!$group_name || empty($matches) || !$user_id) {
     echo json_encode(['status' => 'error', 'message' => 'Missing group_name, matches, or user_id']);
     exit;
+}
+
+// ── 0. Collaborative double-finish guard (Audit C H9) ────────
+// Two devices on the same live match can both press FINISH. The second save
+// used to create a second session and double every player's stats. If the
+// collab session is already finished, hand back the session that was saved
+// so the client can navigate to it (game.tsx handles 'already_exists').
+if ($share_code_input) {
+    try {
+        $collabRow = dbGetRow(
+            "SELECT id, status, saved_session_id FROM collab_sessions WHERE share_code = ? ORDER BY id DESC LIMIT 1",
+            [$share_code_input]
+        );
+        if ($collabRow && ($collabRow['status'] ?? '') === 'finished') {
+            echo json_encode([
+                'status'     => 'already_exists',
+                'message'    => 'This match has already been saved by another device.',
+                'session_id' => $collabRow['saved_session_id'] !== null ? (int)$collabRow['saved_session_id'] : null,
+                'saved_session_id' => $collabRow['saved_session_id'] !== null ? (int)$collabRow['saved_session_id'] : null,
+            ]);
+            exit;
+        }
+    } catch (Throwable $e) {
+        // Never let the guard block a save; fall through to the normal path.
+        error_log("SAVE_SCORES collab guard skipped: " . $e->getMessage());
+    }
 }
 
 // Convert unix timestamp to MySQL datetime
 $sessionDate = date('Y-m-d H:i:s', $custom_timestamp);
 
 // ── 1. Find group by name (NEVER create duplicates) ────────
+// The lookup MUST be scoped to the saving user. Every account is seeded with
+// a group called "Test Group", and organizers routinely reuse names like
+// "Sunday Crew". A name-only lookup attached a new user's first session to
+// ANOTHER owner's group row, so get_leaderboard.php (which is owner-scoped)
+// returned nothing and Rankings showed "No data found" (UAT 2026-09-04).
+// Order of preference: (name + owner, not deleted) → (group_key + owner) →
+// (name only — legacy rows that predate owner_user_id) → create.
 $existingGroup = dbGetRow(
-    "SELECT id FROM `groups` WHERE name = ?",
-    [$group_name]
+    "SELECT id FROM `groups` WHERE name = ? AND owner_user_id = ? AND _deleted_at IS NULL ORDER BY id ASC LIMIT 1",
+    [$group_name, $user_id]
 );
+if (!$existingGroup && $group_id) {
+    $existingGroup = dbGetRow(
+        "SELECT id FROM `groups` WHERE group_key = ? AND owner_user_id = ? AND _deleted_at IS NULL ORDER BY id ASC LIMIT 1",
+        [$group_id, $user_id]
+    );
+}
+if (!$existingGroup) {
+    $existingGroup = dbGetRow(
+        "SELECT id FROM `groups` WHERE name = ? AND (owner_user_id IS NULL OR owner_user_id = 0 OR owner_user_id = '') ORDER BY id ASC LIMIT 1",
+        [$group_name]
+    );
+}
 
 if ($existingGroup) {
     $groupDbId = (int)$existingGroup['id'];
 } else {
     // Only create if truly new — should rarely happen since groups are created in groups.tsx
+    // Never insert an empty group_key (collaborators finish with group_id '' —
+    // Audit C H3/L11): mint one in the same format create_group.php uses.
+    $newGroupKey = $group_id !== '' ? $group_id : ('group_' . time() . '_' . $user_id);
     $groupDbId = dbInsert(
-        "INSERT INTO `groups` (name, owner_user_id, group_key, device_id, created_at, updated_at) 
+        "INSERT INTO `groups` (name, owner_user_id, group_key, device_id, created_at, updated_at)
          VALUES (?, ?, ?, '', NOW(), NOW())",
-        [$group_name, $user_id, $group_id]
+        [$group_name, $user_id, $newGroupKey]
     );
     if (!$groupDbId) {
         echo json_encode(['status' => 'error', 'message' => 'Could not create group']);
@@ -90,7 +150,8 @@ if ($existingSession) {
         // RULE 1: Exact duplicate — same title, date, and scores
         echo json_encode([
             'status' => 'already_exists',
-            'message' => 'This match has already been saved with identical scores.'
+            'message' => 'This match has already been saved with identical scores.',
+            'session_id' => (int)$existingSession['id']
         ]);
         exit;
     }
@@ -108,7 +169,16 @@ if ($existingSession) {
     // force_update = true — delete old matches and re-insert
     $sessionId = (int)$existingSession['id'];
     $conn = getDBConnection();
-    
+
+    // Remember who was in the old rows so their stats get recalculated too.
+    $previousMatchKeys = [];
+    try {
+        $prevRows = dbGetAll("SELECT p1_key, p2_key, p3_key, p4_key FROM matches WHERE session_id = ?", [(string)$sessionId]);
+        if (function_exists('pbnow_match_rows_player_keys')) {
+            $previousMatchKeys = pbnow_match_rows_player_keys($prevRows);
+        }
+    } catch (Throwable $e) { $previousMatchKeys = []; }
+
     // Delete old match rows for this session
     $stmt = $conn->prepare("DELETE FROM matches WHERE session_id = ?");
     $sidStr = (string)$sessionId;
@@ -141,6 +211,31 @@ if (!$existingSession || !$force_update) {
     // First meaningful use: a match has been played and saved. Start the trial
     // clock here rather than at registration. No-op once it is already running.
     pbnow_start_trial_on_first_use($user_id);
+}
+
+// ── 4b. Persist session metadata (fixed teams / tournament placements) ──
+// Columns: sessions.is_fixed_teams TINYINT(1) DEFAULT 0,
+//          sessions.tournament_placements TEXT NULL
+// (migrations/005_session_meta.sql). Guarded so a missing column can never
+// break saving — the match rows and stats matter more than the badge.
+if (!empty($sessionId)) {
+    try {
+        $metaConn = getDBConnection();
+        $metaStmt = $metaConn->prepare("UPDATE sessions SET is_fixed_teams = ?, tournament_placements = ? WHERE id = ?");
+        if ($metaStmt) {
+            $sidInt = (int)$sessionId;
+            $metaStmt->bind_param('isi', $is_fixed_teams, $tournament_placements, $sidInt);
+            if (!$metaStmt->execute()) {
+                error_log("SAVE_SCORES session_meta not stored: " . $metaStmt->error);
+            }
+            $metaStmt->close();
+        } else {
+            error_log("SAVE_SCORES session_meta not stored (prepare failed): " . $metaConn->error);
+        }
+        $metaConn->close();
+    } catch (Throwable $e) {
+        error_log("SAVE_SCORES session_meta skipped: " . $e->getMessage());
+    }
 }
 
 // ── 5. Save individual matches ───────────────────────────────
@@ -207,8 +302,24 @@ foreach ($matches as $match) {
 }
 $playerKeys = array_unique($playerKeys);
 
-// Update stats for each player involved
-foreach ($playerKeys as $pk) {
+// When force-updating, the OLD rows we just deleted may have referenced
+// players no longer in the new payload — recalc those too so their cached
+// stats don't keep a phantom game.
+if (!empty($existingSession) && $force_update && !empty($previousMatchKeys)) {
+    $playerKeys = array_unique(array_merge($playerKeys, $previousMatchKeys));
+}
+
+// Update stats for each player involved.
+// The recalculation now lives in db_config.php as pbnow_recalc_player_stats()
+// (Audit C M6) so update_match / delete_match / delete_session share it.
+// The original inline loop is kept below as the fallback if the helper is
+// ever missing (e.g. an older db_config.php is deployed alongside this file).
+$__statsHelperUsed = false;
+if (function_exists('pbnow_recalc_player_stats')) {
+    pbnow_recalc_player_stats(array_values($playerKeys));
+    $__statsHelperUsed = true;
+}
+foreach ($__statsHelperUsed ? [] : $playerKeys as $pk) {
     // Team 1 matches
     $t1Matches = dbGetAll("SELECT s1, s2 FROM matches WHERE p1_key = ? OR p2_key = ?", [$pk, $pk]);
     $t2Matches = dbGetAll("SELECT s1, s2 FROM matches WHERE p3_key = ? OR p4_key = ?", [$pk, $pk]);

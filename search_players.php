@@ -90,6 +90,10 @@ try {
             'player_key' => $p['player_key'],
             'first_name' => $p['first_name'],
             'last_name' => $p['last_name'] ?? '',
+            // Audit C H8: the game screen's SearchResult wants a display
+            // `name`; added (not replacing anything) so the client can render
+            // rows without re-deriving it. Response shape otherwise unchanged.
+            'name' => trim(($p['first_name'] ?? '') . ' ' . ($p['last_name'] ?? '')),
             'gender' => $p['gender'],
             // cell_phone intentionally omitted — the roster picker never needs
             // it, and it was the most sensitive field V2 exposed.

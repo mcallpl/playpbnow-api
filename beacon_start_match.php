@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -10,11 +10,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once 'db_config.php';
+require_once 'beacon_common.php'; // H1 session adoption + H2 ISO dates
 
 // Parse input
 $input = json_decode(file_get_contents('php://input'), true);
 $lobby_id = $input['lobby_id'] ?? null;
 $host_user_id = $input['host_user_id'] ?? null;
+
+// H1: a valid session token overrides the client-supplied host id.
+$host_user_id = beacon_adopt_session_user($host_user_id);
+$host_user_id = $host_user_id !== null ? (string)$host_user_id : null;
 
 if (!$lobby_id || !$host_user_id) {
     echo json_encode(['status' => 'error', 'message' => 'lobby_id and host_user_id are required']);
@@ -36,6 +41,20 @@ if (!$lobby) {
     exit;
 }
 
+// H7: a second Start press (or a resumed client) on an already-started lobby
+// gets the existing session back instead of an error.
+if ($lobby['status'] === 'started' && (string)$lobby['host_user_id'] === (string)$host_user_id && !empty($lobby['session_code'])) {
+    $conn->close();
+    echo json_encode([
+        'status' => 'success',
+        'already_started' => true,
+        'session_code' => $lobby['session_code'],
+        'session_id' => $lobby['collab_session_id'] !== null ? (int)$lobby['collab_session_id'] : null,
+        'schedule_json' => $lobby['schedule_json'] ? json_decode($lobby['schedule_json'], true) : null
+    ]);
+    exit;
+}
+
 if ($lobby['status'] !== 'locked') {
     $conn->close();
     echo json_encode(['status' => 'error', 'message' => 'Lobby must be locked before starting (status: ' . $lobby['status'] . ')']);
@@ -43,7 +62,7 @@ if ($lobby['status'] !== 'locked') {
 }
 
 // 2. Verify caller is the host
-if ($lobby['host_user_id'] !== $host_user_id) {
+if ((string)$lobby['host_user_id'] !== (string)$host_user_id) {
     $conn->close();
     echo json_encode(['status' => 'error', 'message' => 'Only the host can start the match']);
     exit;

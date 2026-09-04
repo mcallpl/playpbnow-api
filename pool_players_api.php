@@ -5,21 +5,28 @@
 
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
 
-$input = json_decode(file_get_contents('php://input'), true);
+$input = json_decode(file_get_contents('php://input'), true) ?: [];
 $action = $input['action'] ?? '';
 
 switch ($action) {
 
     case 'search':
-        $user_id = $input['user_id'] ?? null;
-        if (!$user_id) { echo json_encode(['status' => 'error', 'message' => 'user_id is required']); exit; }
+    case 'list':
+        // ── Session required (audit C5) ──
+        // This used to trust a body user_id, so anyone who guessed a paying
+        // user's id could dump the whole pool (names, levels, cities, days).
+        // Identity now comes from the Bearer token only; the body user_id is
+        // ignored. 'count' below stays public — the signup page shows it.
+        $user_id = pbnow_require_session_user();
+        $input['user_id'] = (string) $user_id;
 
         if (!userHasActiveSubscription($user_id)) {
             echo json_encode(['status' => 'error', 'message' => 'Active subscription required']); exit;
@@ -34,7 +41,7 @@ switch ($action) {
 
         if (!empty($input['search_name'])) {
             $where[] = "(first_name LIKE ? OR last_name LIKE ? OR CONCAT(first_name, ' ', last_name) LIKE ?)";
-            $term = '%' . $input['search_name'] . '%';
+            $term = '%' . mb_substr((string) $input['search_name'], 0, 100, 'UTF-8') . '%';
             $params[] = $term;
             $params[] = $term;
             $params[] = $term;

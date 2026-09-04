@@ -1,6 +1,8 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: https://peoplestar.com');
+// Wildcard like every other app endpoint (audit C1): identity is the Bearer
+// token, not a cookie, and pinning to peoplestar.com broke web chat.
+header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
@@ -39,6 +41,31 @@ if ($user_id) {
     }
     $owns = dbGetRow("SELECT id FROM match_invites WHERE id = ? AND user_id = ?", [$invite_id, $auth_uid]);
     if (!$owns) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'Not authorized for this invite']);
+        exit;
+    }
+}
+
+// ── Player-branch ownership (audit H7) ──
+// The player_id path used to skip the ownership check entirely, so any logged
+// -in account could post into any invite's chat under any pool player's name.
+// Now: the named player must actually be on this invite's guest list, AND the
+// caller must be the invite's organizer (or an admin) — the public RSVP page
+// has no chat and no session, so nobody else has a legitimate reason to speak
+// as a player here.
+if ($player_id) {
+    $invitedRow = dbGetRow(
+        "SELECT id FROM invite_responses WHERE invite_id = ? AND player_id = ? LIMIT 1",
+        [(int) $invite_id, (int) $player_id]
+    );
+    if (!$invitedRow) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'message' => 'That player is not on this invite']);
+        exit;
+    }
+    $ownsForPlayer = dbGetRow("SELECT id FROM match_invites WHERE id = ? AND user_id = ?", [(int) $invite_id, $auth_uid]);
+    if (!$ownsForPlayer && !pbnow_is_admin($auth_uid)) {
         http_response_code(403);
         echo json_encode(['status' => 'error', 'message' => 'Not authorized for this invite']);
         exit;

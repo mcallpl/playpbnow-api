@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once 'db_config.php';
+require_once 'beacon_common.php'; // H1 session adoption + H2 ISO dates
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -22,6 +23,10 @@ if (!is_array($input)) {
 $beacon_id = $input['beacon_id'] ?? null;
 $user_id = $input['user_id'] ?? null;
 $message = $input['message'] ?? null;
+
+// H1: a valid session token overrides the client-supplied user id.
+$user_id = beacon_adopt_session_user($user_id);
+$user_id = $user_id !== null ? (string)$user_id : null;
 
 if (!$beacon_id || !$user_id || !$message) {
     http_response_code(400);
@@ -53,7 +58,9 @@ $stmt->close();
 
 if (!$profile || !$profile['first_name'] || !$profile['phone']) {
     $conn->close();
-    echo json_encode(['status' => 'error', 'message' => 'You must verify your phone number and enter your name before chatting. Please log out and log back in with Twilio verification.']);
+    // M11: never tell the user to log out — the Play Now tab can collect the
+    // missing phone number / name in place.
+    echo json_encode(['status' => 'error', 'code' => 'profile_incomplete', 'message' => 'Add your phone number and name in Play Now before chatting.']);
     exit;
 }
 
@@ -104,5 +111,8 @@ if ($msg === null) {
     echo json_encode(['status' => 'error', 'message' => 'Failed to retrieve sent message']);
     exit;
 }
+
+$msg['created_at_iso'] = beacon_iso($msg['created_at'] ?? null);
+$msg['is_mine'] = true;
 
 echo json_encode(['status' => 'success', 'data' => $msg]);

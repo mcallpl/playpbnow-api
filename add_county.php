@@ -6,6 +6,11 @@
  */
 header('Content-Type: application/json');
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/require_admin.php';
+
+// Audit E H6: this one-time migration ran ALTER TABLE and burned Google
+// Geocoding quota for anyone who hit the URL. Admin session required.
+require_admin();
 
 $conn = getDBConnection();
 $results = [];

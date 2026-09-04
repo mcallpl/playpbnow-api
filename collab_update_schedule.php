@@ -24,6 +24,11 @@ if (!$input) {
 $share_code = strtoupper(trim($input['share_code'] ?? ''));
 $session_id = (int)($input['session_id'] ?? 0);
 $schedule   = $input['schedule'] ?? [];
+// Audit C H5: when the host SHUFFLES mid-match the pairings change but the
+// server kept the old scores, so every collaborator's next poll re-applied
+// the old scores onto the new pairings. The client passes reset_scores:true
+// on a shuffle; the server wipes the snapshot AND the per-game rows.
+$reset_scores = !empty($input['reset_scores']);
 
 if (!$share_code || !$session_id || empty($schedule)) {
     echo json_encode(['status' => 'error', 'message' => 'Missing required fields']);
@@ -44,14 +49,29 @@ if (!$session) {
 // Update the schedule
 $scheduleJson = json_encode($schedule);
 $conn = getDBConnection();
-$stmt = $conn->prepare("UPDATE collab_sessions SET schedule_json = ? WHERE id = ?");
-$stmt->bind_param('si', $scheduleJson, $session_id);
+if ($reset_scores) {
+    $emptyScores = '{}';
+    $stmt = $conn->prepare("UPDATE collab_sessions SET schedule_json = ?, scores_json = ? WHERE id = ?");
+    $stmt->bind_param('ssi', $scheduleJson, $emptyScores, $session_id);
+} else {
+    $stmt = $conn->prepare("UPDATE collab_sessions SET schedule_json = ? WHERE id = ?");
+    $stmt->bind_param('si', $scheduleJson, $session_id);
+}
 $success = $stmt->execute();
 $stmt->close();
+
+$scores_cleared = 0;
+if ($success && $reset_scores) {
+    $del = $conn->prepare("DELETE FROM collab_score_updates WHERE session_id = ?");
+    $del->bind_param('i', $session_id);
+    $del->execute();
+    $scores_cleared = $del->affected_rows;
+    $del->close();
+}
 $conn->close();
 
 if ($success) {
-    echo json_encode(['status' => 'success']);
+    echo json_encode(['status' => 'success', 'scores_reset' => $reset_scores, 'scores_cleared' => $scores_cleared]);
 } else {
     echo json_encode(['status' => 'error', 'message' => 'Failed to update schedule']);
 }

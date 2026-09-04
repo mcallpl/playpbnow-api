@@ -31,6 +31,20 @@ if (!$session) {
 
 $sid = (int)$session['id'];
 
+// Audit C L8: keep an ACTIVE session alive while anyone is polling it, so a
+// late joiner is never refused by collab_join_match.php's expires_at check
+// while scores are still flowing. Only ever extends; never shortens.
+if (($session['status'] ?? '') === 'active') {
+    try {
+        dbQuery(
+            "UPDATE collab_sessions
+             SET expires_at = DATE_ADD(NOW(), INTERVAL 2 HOUR)
+             WHERE id = ? AND status = 'active' AND (expires_at IS NULL OR expires_at < DATE_ADD(NOW(), INTERVAL 1 HOUR))",
+            [$sid]
+        );
+    } catch (Throwable $e) { /* best effort */ }
+}
+
 // Update heartbeat
 if ($user_id) {
     $existingParticipant = dbGetRow(

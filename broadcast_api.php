@@ -3,7 +3,8 @@
  * Broadcast API — Create and send admin mass messages
  */
 
-header('Access-Control-Allow-Origin: https://peoplestar.com');
+require_once __DIR__ . '/cors_origin.php';
+pbnow_send_cors_headers(); // was: hard-coded legacy origin only (UAT 2026-09-04)
 header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
@@ -118,7 +119,8 @@ switch ($action) {
                 continue;
             }
 
-            $broadcastUrl = "https://peoplestar.com/PlayPBNow/broadcast.html?code={$broadcast['broadcast_code']}";
+            // L15: canonical host (peoplestar.com/PlayPBNow/ is legacy and 301s)
+            $broadcastUrl = "https://playpbnow.com/broadcast.html?code={$broadcast['broadcast_code']}";
 
             // Personalize: prepend first name if SMS doesn't already contain it
             $smsBody = $broadcast['sms_text'];

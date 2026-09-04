@@ -2,7 +2,7 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Auth-Token');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once 'db_config.php';
+require_once 'beacon_common.php'; // H1 session adoption + H2 ISO dates
 
 // Parse input
 $input = json_decode(file_get_contents('php://input'), true);
@@ -21,6 +22,10 @@ $player_count = ($beacon_type === 'casual') ? 0 : ($input['player_count'] ?? 1);
 $skill_level = $input['skill_level'] ?? null;
 $message = $input['message'] ?? null;
 $duration_minutes = (int)($input['duration_minutes'] ?? 60);
+
+// H1: a valid session token overrides the client-supplied user id.
+$user_id = beacon_adopt_session_user($user_id);
+$user_id = $user_id !== null ? (string)$user_id : null;
 
 if (!$user_id || !$court_id) {
     echo json_encode(['status' => 'error', 'message' => 'user_id and court_id are required']);
@@ -107,6 +112,26 @@ $stmt->execute();
 $beacon = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
+// M8: when the upsert re-used an existing beacon, that beacon may already
+// have an open lobby. Hand its id back so the client re-enters it instead of
+// creating a second lobby and stranding the first one's members.
+$beacon['active_lobby_id'] = null;
+$beacon['active_lobby_status'] = null;
+$stmt = $conn->prepare(
+    "SELECT id, status FROM beacon_lobbies WHERE beacon_id = ? AND status IN ('gathering', 'locked') ORDER BY id DESC LIMIT 1"
+);
+$stmt->bind_param('i', $beacon_id);
+$stmt->execute();
+$openLobby = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+if ($openLobby) {
+    $beacon['active_lobby_id'] = (int)$openLobby['id'];
+    $beacon['active_lobby_status'] = $openLobby['status'];
+}
+
 $conn->close();
 
-echo json_encode(['status' => 'success', 'beacon' => $beacon]);
+// H2: ISO copies + seconds-until-expiry (original expires_at untouched)
+$beacon = beacon_add_time_fields($beacon);
+
+echo json_encode(['status' => 'success', 'beacon' => $beacon, 'updated_existing' => (bool)$existing]);

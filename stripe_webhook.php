@@ -88,6 +88,17 @@ switch ($type) {
                 break;
             }
 
+            // ── Paid only (audit M11) ──
+            // checkout.session.completed also fires for sessions whose payment
+            // is still pending (delayed-notification methods) — crediting on
+            // the event alone hands out SMS credits before the money clears.
+            // Those sessions get a later checkout.session.async_payment_succeeded
+            // (not handled here); anything not 'paid' is acknowledged and skipped.
+            if (($object['payment_status'] ?? '') !== 'paid') {
+                error_log("Stripe credits webhook: session $stripe_session_id payment_status=" . ($object['payment_status'] ?? 'missing') . " — not crediting");
+                break;
+            }
+
             // Atomic credit + log, idempotent on stripe_session_id (which has a
             // UNIQUE index). Concurrent Stripe retries can't double-credit: the
             // second log INSERT hits the unique constraint and rolls back.

@@ -6,7 +6,8 @@
  * or crediting an arbitrary account).
  */
 
-header('Access-Control-Allow-Origin: https://peoplestar.com');
+require_once __DIR__ . '/cors_origin.php';
+pbnow_send_cors_headers(); // was: hard-coded legacy origin only (UAT 2026-09-04)
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Content-Type: application/json');
@@ -80,9 +81,13 @@ switch ($action) {
             'metadata[app]' => 'playpbnow',
             'metadata[user_id]' => $user_id,
             'metadata[credits]' => $pkg['credits'],
-            // Absolute URLs (Stripe rejects relative ones).
-            'success_url' => 'https://peoplestar.com/PlayPBNow/app.html?credits=success',
-            'cancel_url' => 'https://peoplestar.com/PlayPBNow/app.html?credits=cancel',
+            // Absolute URLs (Stripe rejects relative ones). Canonical host +
+            // the Invites route: the app reads ?credits= on mount, jumps to
+            // the SMS Credits tab and refreshes the balance (audit C4). The
+            // old peoplestar.com/PlayPBNow/app.html target was the legacy
+            // host and nothing ever handled the parameter.
+            'success_url' => 'https://playpbnow.com/invites?credits=success',
+            'cancel_url' => 'https://playpbnow.com/invites?credits=cancel',
         ]);
 
         if (isset($session['error'])) {

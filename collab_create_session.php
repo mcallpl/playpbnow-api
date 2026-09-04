@@ -19,6 +19,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/collab_auth.php';
 
 $raw = file_get_contents('php://input');
 error_log("COLLAB_CREATE: Raw input length: " . strlen($raw));
@@ -65,8 +66,11 @@ if ($tableCheck->num_rows === 0) {
 $conn->close();
 
 // ── 3. Check if session already has a VALID (non-expired) collab record ──────────
+// Audit #19: ORDER BY id DESC LIMIT 1 — always the newest matching session.
 $existingSession = dbGetRow(
-    "SELECT id, share_code, schedule_json FROM collab_sessions WHERE batch_id = ? AND status = 'active' AND expires_at > NOW()",
+    "SELECT id, share_code, schedule_json FROM collab_sessions
+     WHERE batch_id = ? AND status = 'active' AND expires_at > NOW()
+     ORDER BY id DESC LIMIT 1",
     [$batch_id]
 );
 
@@ -83,10 +87,29 @@ if ($existingSession) {
         dbQuery("UPDATE collab_sessions SET schedule_json = ?, scores_json = ?, expires_at = DATE_ADD(NOW(), INTERVAL 12 HOUR) WHERE id = ?",
             [$newScheduleJson, json_encode($scores), $existingId]);
         dbQuery("DELETE FROM collab_score_updates WHERE session_id = ?", [$existingId]);
+        // Audit #8: this path also replaces the pairings and wipes the scores,
+        // so it must move schedule_version / scores_reset_at exactly as
+        // collab_update_schedule.php does. Guarded — the columns are optional.
+        try {
+            if (pbnow_collab_has_column('collab_sessions', 'schedule_version')) {
+                dbQuery("UPDATE collab_sessions SET schedule_version = schedule_version + 1 WHERE id = ?", [$existingId]);
+            }
+            if (pbnow_collab_has_column('collab_sessions', 'scores_reset_at')) {
+                dbQuery("UPDATE collab_sessions SET scores_reset_at = NOW(6) WHERE id = ?", [$existingId]);
+            }
+        } catch (Throwable $e) { error_log("COLLAB_CREATE version bump skipped: " . $e->getMessage()); }
     } else {
         error_log("COLLAB_CREATE: Found existing session (same schedule), code=" . $existingSession['share_code']);
         dbQuery("UPDATE collab_sessions SET expires_at = DATE_ADD(NOW(), INTERVAL 12 HOUR) WHERE id = ?", [$existingId]);
     }
+
+    // Audit #14: the creator is a participant with role 'host'. This was never
+    // recorded at all, so the host did not appear in "who's connected" until
+    // collab_get_scores.php auto-registered them — as a 'collaborator'.
+    if ($creator_user_id !== '') {
+        pbnow_collab_touch_participant($existingId, (string)$creator_user_id, (string)($input['device_id'] ?? ''), 'host');
+    }
+
     echo json_encode([
         'status' => 'success',
         'share_code' => $existingSession['share_code'],
@@ -97,12 +120,17 @@ if ($existingSession) {
 }
 
 // ── 4. Make sure code is unique ───────────────────────────────
+// Audit #19: uniqueness was only checked among status='active', so a code
+// belonging to a FINISHED session could be handed out again. collab_get_scores
+// selects 'active' or 'finished' — with a reused code it could return the OLD
+// finished row and instantly "finish" a brand-new match on every device. The
+// check now spans ALL statuses.
 $maxAttempts = 10;
 $shareCode = '';
 for ($i = 0; $i < $maxAttempts; $i++) {
     $candidate = generateShareCode();
     $existing = dbGetRow(
-        "SELECT id FROM collab_sessions WHERE share_code = ? AND status = 'active'",
+        "SELECT id FROM collab_sessions WHERE share_code = ? ORDER BY id DESC LIMIT 1",
         [$candidate]
     );
     if (!$existing) {
@@ -142,6 +170,14 @@ if (!$sessionId) {
 }
 
 error_log("COLLAB_CREATE: SUCCESS! session_id=$sessionId, share_code=$shareCode");
+
+// Audit #14: record the creator as role 'host' straight away, so "who's
+// connected" shows them correctly and pbnow_collab_require_host() has a row
+// to lean on. Previously nobody was inserted here at all and the host was
+// later auto-registered as a plain 'collaborator' by collab_get_scores.php.
+if ($creator_user_id !== '') {
+    pbnow_collab_touch_participant((int)$sessionId, (string)$creator_user_id, (string)($input['device_id'] ?? ''), 'host');
+}
 
 echo json_encode([
     'status' => 'success',

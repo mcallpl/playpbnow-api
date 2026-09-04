@@ -27,6 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/trial.php';
+// pbnow_collab_status_supports() / pbnow_collab_claim_outcome() (Audit C H9 →
+// audit #9). Guarded so an older deploy without the file still saves matches.
+if (file_exists(__DIR__ . '/collab_auth.php')) {
+    require_once __DIR__ . '/collab_auth.php';
+}
 
 try {
 
@@ -86,6 +91,94 @@ if ($share_code_input) {
     } catch (Throwable $e) {
         // Never let the guard block a save; fall through to the normal path.
         error_log("SAVE_SCORES collab guard skipped: " . $e->getMessage());
+    }
+}
+
+// ── 0b. ATOMIC finish claim (audit #9) ───────────────────────
+// The guard above reads the collab status ~200 lines before step 7 writes it —
+// a textbook TOCTOU. Two devices pressing FINISH within that window BOTH read
+// 'active', BOTH insert a session, and every player's W/L doubles.
+//
+// So claim the session with the WRITE ITSELF and trust affected_rows:
+//     UPDATE collab_sessions SET status='finishing'
+//     WHERE share_code = ? AND status = 'active'
+// Exactly one caller can move a row out of 'active'. The loser gets 0 rows and
+// returns 'already_exists' with the winner's saved_session_id.
+//
+// Three properties this must have, in order of importance:
+//   1. NEVER strand a match. A shutdown hook releases the claim back to
+//      'active' if this request dies for any reason before step 7 — including
+//      an early `exit`, an exception, or a PHP fatal.
+//   2. NEVER block a save. No collab row, an expired one, or a database that
+//      has not had migration 006 applied (so 'finishing' is not a valid enum
+//      member) all fall through to the pre-existing behaviour. Writing a value
+//      an ENUM does not contain silently stores '' on MySQL — the historic bug
+//      that collab_alter_mysql8.sql had to repair — so the member is checked
+//      first, never assumed.
+//   3. Only apply to collaborative saves ($share_code_input present).
+$GLOBALS['__pbnow_collab_claim'] = ['code' => $share_code_input, 'claimed' => false, 'finalized' => false];
+
+register_shutdown_function(function () {
+    $c = $GLOBALS['__pbnow_collab_claim'] ?? null;
+    if (!$c || empty($c['claimed']) || !empty($c['finalized']) || ($c['code'] ?? '') === '') return;
+    try {
+        dbQuery(
+            "UPDATE collab_sessions SET status = 'active' WHERE share_code = ? AND status = 'finishing'",
+            [$c['code']]
+        );
+        error_log("SAVE_SCORES: released collab claim for {$c['code']} — save did not complete, match is live again");
+    } catch (Throwable $e) {
+        error_log("SAVE_SCORES: could not release collab claim for {$c['code']}: " . $e->getMessage());
+    }
+});
+
+if ($share_code_input && function_exists('pbnow_collab_status_supports') && pbnow_collab_status_supports('finishing')) {
+    try {
+        $claimConn = getDBConnection();
+        $claimStmt = $claimConn->prepare(
+            "UPDATE collab_sessions SET status = 'finishing' WHERE share_code = ? AND status = 'active'"
+        );
+        $claimed = 0;
+        if ($claimStmt) {
+            $claimStmt->bind_param('s', $share_code_input);
+            $claimStmt->execute();
+            $claimed = $claimStmt->affected_rows;
+            $claimStmt->close();
+        }
+
+        $nowRow = dbGetRow(
+            "SELECT status, saved_session_id FROM collab_sessions WHERE share_code = ? ORDER BY id DESC LIMIT 1",
+            [$share_code_input]
+        );
+        $outcome = pbnow_collab_claim_outcome((int)$claimed, $nowRow['status'] ?? null);
+
+        if ($outcome['claimed']) {
+            $GLOBALS['__pbnow_collab_claim']['claimed'] = true;
+        } elseif ($outcome['outcome'] === 'already_saved' || $outcome['outcome'] === 'saving_elsewhere') {
+            // Another device won the race. If it is still mid-save, wait a
+            // moment for it to publish saved_session_id so the loser can
+            // navigate to the right leaderboard session instead of nowhere.
+            $savedId = $nowRow['saved_session_id'] ?? null;
+            for ($try = 0; $try < 5 && $savedId === null; $try++) {
+                usleep(400000); // 0.4s, max 2s total
+                $poll = dbGetRow(
+                    "SELECT status, saved_session_id FROM collab_sessions WHERE share_code = ? ORDER BY id DESC LIMIT 1",
+                    [$share_code_input]
+                );
+                $savedId = $poll['saved_session_id'] ?? null;
+            }
+            echo json_encode([
+                'status'           => 'already_exists',
+                'message'          => 'This match has already been saved by another device.',
+                'session_id'       => $savedId !== null ? (int)$savedId : null,
+                'saved_session_id' => $savedId !== null ? (int)$savedId : null,
+            ]);
+            exit;
+        }
+        // 'proceed' — no live collab row for this code. Save normally.
+    } catch (Throwable $e) {
+        // A failed claim must never stop a real match being saved.
+        error_log("SAVE_SCORES collab claim skipped: " . $e->getMessage());
     }
 }
 
@@ -197,12 +290,36 @@ if ($existingSession) {
 // ── 4. Create new session if not updating ────────────────────
 if (!$existingSession || !$force_update) {
     $unique_batch_id = $group_id . '_' . time();
-    $sessionId = dbInsert(
-        "INSERT INTO sessions (group_id, batch_id, title, device_id, user_id, session_date, scores_hash, created_at, player_count, male_count, female_count)
-         VALUES (?, ?, ?, '', ?, ?, ?, NOW(), 0, 0, 0)",
-        [$groupDbId, $unique_batch_id, $match_title, $user_id, $sessionDate, $scoresHash]
-    );
-    
+    // migrations/007_sessions_finish_backstop.sql adds a UNIQUE key on
+    // (group_id, session_date, title) as a database-level backstop for the
+    // double-save race. If it fires, the other request has already written
+    // exactly this session — hand its id back as 'already_exists' rather than
+    // surfacing a raw database error to someone who just finished a match.
+    $sessionId = null;
+    try {
+        $sessionId = dbInsert(
+            "INSERT INTO sessions (group_id, batch_id, title, device_id, user_id, session_date, scores_hash, created_at, player_count, male_count, female_count)
+             VALUES (?, ?, ?, '', ?, ?, ?, NOW(), 0, 0, 0)",
+            [$groupDbId, $unique_batch_id, $match_title, $user_id, $sessionDate, $scoresHash]
+        );
+    } catch (Throwable $e) {
+        error_log("SAVE_SCORES session insert rejected (likely duplicate): " . $e->getMessage());
+        $winner = dbGetRow(
+            "SELECT id FROM sessions WHERE group_id = ? AND session_date = ? AND title = ? ORDER BY id ASC LIMIT 1",
+            [$groupDbId, $sessionDate, $match_title]
+        );
+        if ($winner) {
+            echo json_encode([
+                'status'           => 'already_exists',
+                'message'          => 'This match has already been saved.',
+                'session_id'       => (int)$winner['id'],
+                'saved_session_id' => (int)$winner['id'],
+            ]);
+            exit;
+        }
+        $sessionId = null;
+    }
+
     if (!$sessionId) {
         echo json_encode(['status' => 'error', 'message' => 'Could not create session']);
         exit;
@@ -351,13 +468,28 @@ foreach ($__statsHelperUsed ? [] : $playerKeys as $pk) {
 // Store the saved session_id so collaborators can navigate to the correct leaderboard session
 if ($share_code_input) {
     $conn3 = getDBConnection();
-    $stmt3 = $conn3->prepare(
-        "UPDATE collab_sessions SET status = 'finished', saved_session_id = ? WHERE share_code = ? AND status = 'active'"
-    );
-    $stmt3->bind_param('is', $sessionId, $share_code_input);
-    $stmt3->execute();
-    $stmt3->close();
+    // Audit #9: this must also close out a session THIS request claimed by
+    // moving it to 'finishing'. The original 'active' case is kept so a save
+    // still works on a database where migration 006 has not been applied (the
+    // claim above is a no-op there and the row is still 'active').
+    try {
+        $stmt3 = $conn3->prepare(
+            "UPDATE collab_sessions SET status = 'finished', saved_session_id = ?
+             WHERE share_code = ? AND status IN ('active', 'finishing')"
+        );
+        $stmt3->bind_param('is', $sessionId, $share_code_input);
+        $stmt3->execute();
+        $stmt3->close();
+    } catch (Throwable $e) {
+        // collab_sessions has UNIQUE (share_code, status): an ancient finished
+        // row for a reused code could reject this. The match itself is already
+        // saved by now, so never turn that into an error for the user.
+        error_log("SAVE_SCORES could not mark collab session finished: " . $e->getMessage());
+    }
     $conn3->close();
+
+    // The claim is now resolved — the shutdown hook must not undo it.
+    $GLOBALS['__pbnow_collab_claim']['finalized'] = true;
 }
 
 echo json_encode([

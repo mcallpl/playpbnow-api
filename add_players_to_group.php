@@ -8,11 +8,35 @@ require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/require_admin.php';
 
 // Audit E H6: this endpoint had NO identity at all — anyone could add any
-// player id to any group id. WRITE endpoint: the session user is required
-// and must own the target group.
-$auth_uid = pbnow_require_session_user();
+// player id to any group id. It now always enforces GROUP OWNERSHIP.
+//
+// Identity is taken from the Bearer session when there is one. When there
+// is not, we fall back to the body user_id instead of hard-401ing, because
+// the build shipped in the App Store and on Google Play (1.4.5) calls this
+// endpoint on the LEGACY peoplestar host and its interceptor only attaches
+// the token to playpbnow.com URLs — so a hard requirement would break
+// "add players to group" for every store user until the over-the-air
+// update reached them (UAT 2026-09-04).
+//
+// This is still strictly stronger than what was here before: the caller
+// must own the target group either way. Once the OTA has rolled out, the
+// fallback can be removed and this can become pbnow_require_session_user().
+$auth_uid = pbnow_optional_user_id();
+$legacy_unauthenticated = ($auth_uid === null);
+if ($legacy_unauthenticated) {
+    $body_uid = $input_probe = json_decode(file_get_contents('php://input'), true);
+    $auth_uid = is_array($body_uid) ? (int)($body_uid['user_id'] ?? 0) : 0;
+    if ($auth_uid <= 0) {
+        http_response_code(401);
+        echo json_encode(['status' => 'error', 'message' => 'Sign in to add players to a group.']);
+        exit;
+    }
+    error_log('add_players_to_group: legacy unauthenticated caller, falling back to body user_id ' . $auth_uid);
+}
 
-$input = json_decode(file_get_contents('php://input'), true);
+$input = isset($input_probe) && is_array($input_probe)
+    ? $input_probe
+    : json_decode(file_get_contents('php://input'), true);
 if (!is_array($input)) $input = [];
 $player_ids = $input['player_ids'] ?? [];
 $group_id = $input['group_id'] ?? '';

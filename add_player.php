@@ -12,14 +12,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/require_admin.php';
 require_once __DIR__ . '/identity.php';
+require_once __DIR__ . '/name_tidy.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $group_key          = $input['group_key'] ?? '';
 // Capitalize EVERY word ("jane smith" -> "Jane Smith", "mary-kate o'brien" ->
 // "Mary-Kate O'Brien"). ucfirst alone saved a full name typed into one box,
 // or imported from a list, as "Jane smith".
-$first_name         = ucwords(strtolower(trim($input['first_name'] ?? '')), " -'");
-$last_name          = ucwords(strtolower(trim($input['last_name'] ?? '')), " -'");
+// A word that already has its own capitals inside it ("McAllister",
+// "MacDavid", "DeShawn") is kept as written; only all-lowercase or ALL-CAPS
+// words are normalized, since lowercasing first turned McAllister into Mcallister.
+$first_name         = pbnow_tidy_name($input['first_name'] ?? '');
+$last_name          = pbnow_tidy_name($input['last_name'] ?? '');
 $gender             = $input['gender'] ?? '';
 $player_key         = $input['player_key'] ?? 'pk_' . time() . '_' . rand(1000,9999);
 $cell_phone         = trim($input['cell_phone'] ?? '');

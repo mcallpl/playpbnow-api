@@ -15,8 +15,11 @@ require_once __DIR__ . '/identity.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $group_key          = $input['group_key'] ?? '';
-$first_name         = ucfirst(strtolower(trim($input['first_name'] ?? '')));
-$last_name          = ucfirst(strtolower(trim($input['last_name'] ?? '')));
+// Capitalize EVERY word ("jane smith" -> "Jane Smith", "mary-kate o'brien" ->
+// "Mary-Kate O'Brien"). ucfirst alone saved a full name typed into one box,
+// or imported from a list, as "Jane smith".
+$first_name         = ucwords(strtolower(trim($input['first_name'] ?? '')), " -'");
+$last_name          = ucwords(strtolower(trim($input['last_name'] ?? '')), " -'");
 $gender             = $input['gender'] ?? '';
 $player_key         = $input['player_key'] ?? 'pk_' . time() . '_' . rand(1000,9999);
 $cell_phone         = trim($input['cell_phone'] ?? '');

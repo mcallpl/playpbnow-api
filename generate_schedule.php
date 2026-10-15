@@ -290,6 +290,66 @@ function chooseSittersForMixed($ids, $sitCounts, $n, $P, $gamesThisRound) {
     return array_merge($pick($males, $maleSitters), $pick($females, $femaleSitters));
 }
 
+/**
+ * Sitter choice for MIXED rounds, byes first (Chip, 2026-10-15).
+ *
+ * "In the case of there being an unequal number of players and there being
+ * byes, the byes outweigh the other rules because we don't want people
+ * sitting out unequally." With 18 men and 11 women on 4 courts the strict
+ * chooser (chooseSittersForMixed) sat 10 men and 3 women every round, so men
+ * sat about twice as often as women.
+ *
+ * This takes everyone with the fewest sits first, exactly like
+ * chooseSitters(), so after any number of rounds no one has sat more than one
+ * round more than anyone else. Only among players who are TIED on sits does
+ * gender matter: the extra seats are shared between the men and the women in
+ * proportion to how many of each there are, so every round's court has about
+ * the same mix and buildRound() needs as few same-gender teams as possible.
+ * chooseSittersForMixed() is kept, no longer called for this.
+ */
+function chooseSittersFairMixed($ids, $sitCounts, $n, $P) {
+    $ids = array_values($ids);
+    if ($n <= 0 || empty($ids)) return [];
+    shuffle($ids);
+    $order = array_flip($ids);
+    usort($ids, function($a, $b) use ($sitCounts, $order) {
+        $ca = $sitCounts[$a] ?? 0;
+        $cb = $sitCounts[$b] ?? 0;
+        if ($ca !== $cb) return $ca <=> $cb;
+        return $order[$a] <=> $order[$b];
+    });
+    $n = min($n, count($ids));
+    $cut = $sitCounts[$ids[$n - 1]] ?? 0;          // sit count of the last seat
+    $sitters = [];
+    $tied = ['m' => [], 'f' => []];
+    foreach ($ids as $id) {
+        $c = $sitCounts[$id] ?? 0;
+        if ($c < $cut) $sitters[] = $id;            // must sit: fewest sits so far
+        elseif ($c === $cut) $tied[isFemale($id, $P) ? 'f' : 'm'][] = $id;
+    }
+    // Sits so far per gender, counting the must-sit players above. Ties go
+    // to whichever gender has sat LESS per person, so the men and the women
+    // share the byes in proportion every round. (Sitting the larger gender
+    // first instead looked tidier for a few rounds, then forced 8 of 11 women
+    // to sit at once and left a court of 13 men and 3 women.)
+    $size = ['m' => 0, 'f' => 0]; $sat = ['m' => 0, 'f' => 0];
+    foreach ($ids as $id) {
+        $g = isFemale($id, $P) ? 'f' : 'm';
+        $size[$g]++;
+        $sat[$g] += $sitCounts[$id] ?? 0;
+    }
+    foreach ($sitters as $id) $sat[isFemale($id, $P) ? 'f' : 'm']++;
+    while (count($sitters) < $n) {
+        $rate = function($g) use ($size, $sat) { return $size[$g] ? ($sat[$g] + 1) / $size[$g] : INF; };
+        $g = ($rate('m') <= $rate('f')) ? 'm' : 'f';
+        if (empty($tied[$g])) $g = ($g === 'm') ? 'f' : 'm';
+        if (empty($tied[$g])) break;
+        $sitters[] = array_shift($tied[$g]);
+        $sat[$g]++;
+    }
+    return $sitters;
+}
+
 function buildRound($pool, $pairCounts, $maxAllowed, $mode, $P, $mixedCounts) {
     if (count($pool) < 4) return [];
 
@@ -300,6 +360,31 @@ function buildRound($pool, $pairCounts, $maxAllowed, $mode, $P, $mixedCounts) {
         if ($mode === 'mixed') {
             $ms = array_values(array_filter($orderedPool, function($id) use ($P) { return !isFemale($id,$P); }));
             $fs = array_values(array_filter($orderedPool, function($id) use ($P) { return isFemale($id,$P); }));
+            // When the court is uneven (byes come first, see
+            // chooseSittersFairMixed), make every man+woman team possible,
+            // then pair the extra players of the larger gender together and
+            // put each such team against a man+woman team: two men vs a man
+            // and a woman is fine, two men vs two women never is.
+            if (count($ms) !== count($fs) && count($orderedPool) % 4 === 0) {
+                $mf = []; $same = [];
+                while (!empty($ms) && !empty($fs)) $mf[] = [array_shift($ms), array_shift($fs)];
+                $rest = array_merge($ms, $fs);              // only one gender is left
+                while (count($rest) >= 2) $same[] = [array_shift($rest), array_shift($rest)];
+                foreach (array_merge($mf, $same) as $t) {
+                    if (($pairCounts[pk($t[0],$t[1])]??0) >= $maxAllowed) return false;
+                }
+                while (!empty($same) && !empty($mf)) {
+                    $x = array_shift($same); $y = array_shift($mf);
+                    $games[] = G($x[0],$x[1],$y[0],$y[1],$P);
+                }
+                $teams = array_merge($mf, $same);           // all mixed, or all one gender
+                while (count($teams) >= 2) {
+                    $x = array_shift($teams); $y = array_shift($teams);
+                    if (genderViolation($x[0],$x[1],$y[0],$y[1],$P)) return false;
+                    $games[] = G($x[0],$x[1],$y[0],$y[1],$P);
+                }
+                return $games;
+            }
             while (count($ms) >= 2 && count($fs) >= 2) {
                 $a=array_shift($ms); $b=array_shift($fs);
                 $c=array_shift($ms); $d=array_shift($fs);
@@ -476,9 +561,22 @@ function pbnow_build_schedule(array $P, array $round_configs, int $courts = 0): 
                 // A mixed round needs an even split on court; see
                 // chooseSittersForMixed(). Falls back to the plain chooser when
                 // an even split is not possible.
+                // Byes first (Chip, 2026-10-15): a mixed round takes the
+                // fewest-sits players like every other round, using gender only
+                // to break ties. See chooseSittersFairMixed().
+                // With as many men as women, strictly mixed courts and even
+                // byes already go together, so the original chooser keeps every
+                // team 1 man + 1 woman. Only an uneven group needs byes-first.
                 $sitters = null;
                 if ($mode === 'mixed') {
-                    $sitters = chooseSittersForMixed($all_ids, $sitCount, $sitN, $P, $games);
+                    $nF = 0;
+                    foreach ($all_ids as $id) if (isFemale($id, $P)) $nF++;
+                    if ($nF * 2 === $n) {
+                        $sitters = chooseSittersForMixed($all_ids, $sitCount, $sitN, $P, $games);
+                    } else {
+                        $sitters = chooseSittersFairMixed($all_ids, $sitCount, $sitN, $P);
+                        if (empty($sitters) && $sitN > 0) $sitters = null;
+                    }
                 }
                 if ($sitters === null) {
                     $sitters = chooseSitters($all_ids, $sitCount, $sitN, $P);
@@ -488,6 +586,12 @@ function pbnow_build_schedule(array $P, array $round_configs, int $courts = 0): 
                 $result = buildRound($pool, $pairCounts, $maxAllowed, $mode, $P, $mixedCounts);
 
                 if ($result === false) {
+                    // A mixed round that cannot be built this way gets a fresh
+                    // start (new sitters, new order) before it may fall back to
+                    // anyone-with-anyone. Falling back on the first miss is what
+                    // left a 6 men / 6 women group with same-gender teams in a
+                    // Mixed round about 1 run in 150.
+                    if ($mode === 'mixed' && $run < 49) { $failed = true; break; }
                     if ($mode === 'mixed') {
                         $result = buildRound($pool, $pairCounts, $maxAllowed, 'mixer', $P, $mixedCounts);
                     }

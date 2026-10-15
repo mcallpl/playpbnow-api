@@ -161,6 +161,44 @@ foreach ([[16, 8, 2], [16, 8, 3], [12, 6, 2], [8, 4, 1]] as [$n, $males, $courts
     checkSchedule($Pm, $b['schedule'], $rounds, $label, min(intdiv($n, 4), $courts));
 }
 
+// ── uneven groups: byes come first (Chip, 2026-10-15) ──
+// "The byes outweigh the other rules because we don't want people sitting out
+// unequally." With 18 men and 11 women on 4 courts, Mixed rounds used to sit
+// 10 men and 3 women every round, so men sat about twice as often. Now
+// everyone stays within one bye of everyone else, after EVERY round, and the
+// leftover same-gender team plays a man+woman team: never two men vs two women.
+echo "\nuneven groups: byes first, then as mixed as possible\n";
+foreach ([[29, 18, 4, 8], [29, 11, 4, 8], [17, 12, 3, 6], [13, 9, 2, 6], [10, 7, 2, 6]] as [$n, $males, $courts, $rds]) {
+    $Pu = makeRoster($n, $males);
+    $bu = pbnow_build_schedule($Pu, array_fill(0, $rds, ['type' => 'mixed']), $courts);
+    $label = "{$n} players ({$males}M) on {$courts} courts, {$rds} mixed rounds";
+    t_assert($bu['error'] === null, "{$label}: no error (" . ($bu['error'] ?? 'ok') . ")");
+    $sits = array_fill_keys(array_keys($Pu), 0);
+    $worst = 0; $mmVsFf = 0; $sameVsSameAvoidable = 0;
+    foreach (($bu['schedule'] ?? []) as $rd) {
+        foreach ($rd['byes'] as $bp) $sits[$bp['id']]++;
+        $worst = max($worst, max($sits) - min($sits));
+        $mixedTeams = 0; $sameTeams = 0; $sameVsSame = 0;
+        foreach ($rd['games'] as $g) {
+            $kinds = [];
+            foreach (['team1', 'team2'] as $tk) {
+                $f = 0;
+                foreach ($g[$tk] as $pl) if (strpos($Pu[$pl['id']]['gender'], 'f') === 0) $f++;
+                $kinds[] = $f;
+                if ($f === 1) $mixedTeams++; else $sameTeams++;
+            }
+            sort($kinds);
+            if ($kinds === [0, 2]) $mmVsFf++;
+            if ($kinds[0] !== 1 && $kinds[1] !== 1) $sameVsSame++;
+        }
+        // Two same-gender teams may only meet when there are more of them than mixed teams.
+        if ($sameVsSame > 0 && $sameTeams <= $mixedTeams) $sameVsSameAvoidable++;
+    }
+    t_assert($worst <= 1, "{$label}: byes within 1 of each other after every round (worst {$worst})");
+    t_assert($mmVsFf === 0, "{$label}: never two men vs two women ({$mmVsFf})");
+    t_assert($sameVsSameAvoidable === 0, "{$label}: a same-gender team plays a man+woman team when one is free ({$sameVsSameAvoidable})");
+}
+
 // ── failure reporting ──
 echo "\nfailure reporting\n";
 $P3 = makeRoster(3);

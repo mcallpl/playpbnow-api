@@ -82,7 +82,9 @@ if ($existingSession) {
     // stale scores. If the schedule is identical, it's a true resume: keep all.
     $existingId = (int)$existingSession['id'];
     $newScheduleJson = json_encode($schedule);
+    $scoresWereReset = false;
     if (($existingSession['schedule_json'] ?? '') !== $newScheduleJson) {
+        $scoresWereReset = true;
         error_log("COLLAB_CREATE: Reusing session $existingId but schedule changed — resetting for new match");
         dbQuery("UPDATE collab_sessions SET schedule_json = ?, scores_json = ?, expires_at = DATE_ADD(NOW(), INTERVAL 12 HOUR) WHERE id = ?",
             [$newScheduleJson, json_encode($scores), $existingId]);
@@ -114,7 +116,12 @@ if ($existingSession) {
         'status' => 'success',
         'share_code' => $existingSession['share_code'],
         'session_id' => $existingId,
-        'message' => 'Existing session found'
+        'message' => 'Existing session found',
+        // 2026-10-15 UAT: tells the host app this code now holds a NEW match.
+        // The app keeps a saved copy of each match's scores under its share
+        // code; without this flag it reloaded the OLD match's copy and pushed
+        // those scores back onto the new pairings two seconds after the wipe.
+        'reset' => $scoresWereReset
     ]);
     exit;
 }

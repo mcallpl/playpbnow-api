@@ -364,6 +364,11 @@ if (!function_exists('pbnow_collab_touch_participant')) {
     function pbnow_collab_touch_participant(int $sessionId, string $userId, string $deviceId = '', string $role = 'collaborator'): void {
         if ($sessionId <= 0 || $userId === '') return;
         if ($role !== 'host' && $role !== 'collaborator') $role = 'collaborator';
+        // Same fallback as pbnow_collab_identity(): no device id means the
+        // device IS the user. Some callers passed the raw (empty) id and others
+        // the identity's "u:<id>", so one person got two rows and the LIVE bar
+        // counted everyone twice (2026-10-15 UAT: 5 connected for 3 people).
+        if ($deviceId === '') $deviceId = 'u:' . $userId;
 
         $hasDevice = pbnow_collab_has_column('collab_participants', 'device_id');
         $hasDeleted = pbnow_collab_has_column('collab_participants', '_deleted_at');

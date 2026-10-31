@@ -591,7 +591,14 @@ function pbnow_build_schedule(array $P, array $round_configs, int $courts = 0): 
                     // anyone-with-anyone. Falling back on the first miss is what
                     // left a 6 men / 6 women group with same-gender teams in a
                     // Mixed round about 1 run in 150.
-                    if ($mode === 'mixed' && $run < 49) { $failed = true; break; }
+                    // ... and (2026-10-31) only once repeat partners have been
+                    // tried too. Falling back while the cap was still 1 meant
+                    // 4 men + 4 women got men-only and women-only teams in
+                    // rounds 5 and 6, rather than a repeat man+woman pair
+                    // (which the app shows in orange and the organizer can
+                    // swap). The cap rises to max(2, rounds), so a strict
+                    // mixed round always gets its chance with repeats first.
+                    if ($mode === 'mixed' && ($run < 49 || $maxAllowed < $maxCap)) { $failed = true; break; }
                     if ($mode === 'mixed') {
                         $result = buildRound($pool, $pairCounts, $maxAllowed, 'mixer', $P, $mixedCounts);
                     }

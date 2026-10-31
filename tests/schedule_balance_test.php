@@ -199,6 +199,49 @@ foreach ([[29, 18, 4, 8], [29, 11, 4, 8], [17, 12, 3, 6], [13, 9, 2, 6], [10, 7,
     t_assert($sameVsSameAvoidable === 0, "{$label}: a same-gender team plays a man+woman team when one is free ({$sameVsSameAvoidable})");
 }
 
+// ── small everyday groups, default 6 Mixed rounds (2026-10-31) ──
+// Found while filming the Quick Start: 4 men + 4 women with the default 6
+// Mixed rounds put men-only and women-only teams in rounds 5 and 6 (labeled
+// MIXED DOUBLES). After 4 rounds every man+woman pair has played, and the
+// generator fell back to anyone-with-anyone BEFORE trying a repeat partner.
+// The rule: an equal group stays strictly man+woman, and a repeat partner
+// (shown orange) is the price. Uneven groups: never two men vs two women, and
+// two same-gender teams meet only when there is no man+woman team to play.
+// Each case runs several times because the generator is random.
+echo "\nsmall groups, 6 mixed rounds, every court\n";
+foreach ([[4, 2], [6, 3], [8, 4], [10, 5], [12, 6], [8, 5], [8, 3], [9, 4], [7, 4], [10, 6]] as [$n, $males]) {
+    $Ps = makeRoster($n, $males);
+    $equal = ($males * 2 === $n);
+    $label = "{$n} players ({$males}M), 6 mixed rounds";
+    $sameTeamsEqual = 0; $mmVsFf = 0; $avoidable = 0; $errors = 0; $short = 0;
+    for ($rep = 0; $rep < 5; $rep++) {
+        $bs = pbnow_build_schedule($Ps, array_fill(0, 6, ['type' => 'mixed']), 0);
+        if ($bs['error'] !== null) { $errors++; continue; }
+        if (count($bs['schedule']) !== 6) $short++;
+        foreach ($bs['schedule'] as $rd) {
+            $mixedTeams = 0; $sameTeams = 0; $sameVsSame = 0;
+            foreach ($rd['games'] as $g) {
+                $kinds = [];
+                foreach (['team1', 'team2'] as $tk) {
+                    $f = 0;
+                    foreach ($g[$tk] as $pl) if (strpos($Ps[$pl['id']]['gender'], 'f') === 0) $f++;
+                    $kinds[] = $f;
+                    if ($f === 1) $mixedTeams++; else $sameTeams++;
+                }
+                sort($kinds);
+                if ($kinds === [0, 2]) $mmVsFf++;
+                if ($kinds[0] !== 1 && $kinds[1] !== 1) $sameVsSame++;
+            }
+            if ($equal) $sameTeamsEqual += $sameTeams;
+            if ($sameVsSame > 0 && $sameTeams <= $mixedTeams) $avoidable++;
+        }
+    }
+    t_assert($errors === 0 && $short === 0, "{$label}: always 6 rounds ({$errors} errors, {$short} short)");
+    t_assert($mmVsFf === 0, "{$label}: never two men vs two women ({$mmVsFf})");
+    if ($equal) t_assert($sameTeamsEqual === 0, "{$label}: equal group, every team is a man and a woman ({$sameTeamsEqual} same-gender teams)");
+    else t_assert($avoidable === 0, "{$label}: same-gender teams only meet when unavoidable ({$avoidable})");
+}
+
 // ── failure reporting ──
 echo "\nfailure reporting\n";
 $P3 = makeRoster(3);

@@ -103,6 +103,10 @@ if ($action === 'request_code' && $reset_email !== '' && trim((string)($input['p
     $phone_raw = trim($input['phone'] ?? '');
     $code = trim($input['code'] ?? '');
 
+    if ($reset_email !== '' && !$email_user && !empty($code)) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid or expired code']);
+        exit;
+    }
     if ((empty($phone_raw) && !$email_user) || empty($code)) {
         echo json_encode(['status' => 'error', 'message' => 'Phone and code are required']);
         exit;

@@ -391,7 +391,7 @@ switch ($action) {
             if (!empty($affected)) {
                 $shortDate = date('D M j', strtotime($invite['match_date']));
                 $shortTime = date('g:iA', strtotime($invite['match_time']));
-                $cancelMsg = "PlayPBNow: Canceled: {$shortDate} {$shortTime} @ {$invite['court_name']}. Sorry — the organizer had to call this one off.";
+                $cancelMsg = "PlayPBNow: Canceled: {$shortDate} {$shortTime} @ {$invite['court_name']}. Sorry, the organizer had to call this one off.";
                 try {
                     $cancelClient = new \Twilio\Rest\Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
                 } catch (\Throwable $e) {
@@ -511,7 +511,7 @@ switch ($action) {
             $shortUrl = rebrandlyShorten(
                 $responseUrl,
                 "You're Invited to Play Pickleball!",
-                "{$matchTypeDisplay} — {$fullDate} at {$fullTime} @ {$invite['court_name']}",
+                "{$matchTypeDisplay}, {$fullDate} at {$fullTime} @ {$invite['court_name']}",
                 "https://peoplestar.com/PlayPBNow/og-invite.jpg"
             );
             $linkMessage = $shortUrl ?: $responseUrl;
@@ -526,8 +526,8 @@ switch ($action) {
                 $message .= "\n{$customNote}\n";
             }
             $message .= "\nWe'd love to have you on the court. Spots are limited, so don't wait!\n\n";
-            $message .= "Tap the link in my next message to RSVP.\n\n";
-            $message .= "— Chip McAllister, Play PB Now";
+            $message .= "Tap the link in my next message to RSVP.";
+            // No signature (Chip, 2026-09-13): this goes out from his own phone.
 
             // Message 2: Just the short link (iMessage will show OG preview card with logo)
             dbInsert(

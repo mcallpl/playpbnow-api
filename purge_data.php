@@ -72,7 +72,7 @@ foreach ($tablesToPurge as $table) {
         'payment_transactions', 'subscriptions', 'sms_verifications', 'verification_codes',
         'user_sessions', 'groups'
     ])) {
-        $results[$table] = "Invalid table name — skipped for security";
+        $results[$table] = "Invalid table name, skipped for security";
         continue;
     }
 
@@ -90,7 +90,7 @@ foreach ($tablesToPurge as $table) {
         $conn->query("TRUNCATE TABLE " . $conn->real_escape_string($table));
         $results[$table] = "Purged ($count rows)";
     } else {
-        $results[$table] = "Table not found — skipped";
+        $results[$table] = "Table not found, skipped";
     }
 }
 

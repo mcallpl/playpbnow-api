@@ -350,7 +350,7 @@ switch ($action) {
             echo json_encode([
                 'status' => 'success',
                 'message' => $stayedWaitlisted
-                    ? "Still full — you're on the waitlist at position #{$position}. We'll text you the moment a spot opens up!"
+                    ? "Still full. You're on the waitlist at position #{$position}. We'll text you the moment a spot opens up!"
                     : "All spots are full! You're on the waitlist at position #{$position}. We'll text you if a spot opens up!",
                 'waitlisted' => true,
                 'waitlist_position' => $position,

@@ -174,7 +174,7 @@ $response = [
 
 if ($expiredNow) {
     $response['expired'] = true;
-    $response['message'] = 'This live session expired. Your scores are safe on this device — start a new shared session to keep syncing.';
+    $response['message'] = 'This live session expired. Your scores are safe on this device. Start a new shared session to keep syncing.';
 }
 
 echo json_encode($response);

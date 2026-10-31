@@ -9,8 +9,52 @@ require_once __DIR__ . '/db_config.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 $action = $input['action'] ?? '';
+require_once __DIR__ . '/lib_mail.php';
 
-if ($action === 'request_code') {
+// 2026-10-31: the app sends { email } when someone types their email instead
+// of a phone number. This file only ever read 'phone', so every email reset
+// failed with "Please enter your phone number". An email is now looked up
+// directly; the code still goes to the phone on file (as before), or by
+// email when the account has no phone. Phone callers are unchanged.
+$reset_email = strtolower(trim((string)($input['email'] ?? '')));
+$email_user = null;
+if ($reset_email !== '' && trim((string)($input['phone'] ?? '')) === '') {
+    $email_user = dbGetRow("SELECT id, first_name, email, phone FROM users WHERE LOWER(email) = ? AND _deleted_at IS NULL", [$reset_email]);
+}
+
+if ($action === 'request_code' && $reset_email !== '' && trim((string)($input['phone'] ?? '')) === '') {
+    // ── Step 1 by EMAIL ──
+    // Same answer whether or not the email exists, so this cannot be used to
+    // find out who has an account.
+    $generic = ['status' => 'success', 'message' => 'If that email is on an account, a reset code is on its way.'];
+    if (!$email_user) { echo json_encode($generic); exit; }
+
+    $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    dbQuery("DELETE FROM password_reset_codes WHERE user_id = ?", [$email_user['id']]);
+    dbQuery("INSERT INTO password_reset_codes (user_id, code, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 15 MINUTE))", [$email_user['id'], $code]);
+
+    $phone_on_file = trim((string)($email_user['phone'] ?? ''));
+    if ($phone_on_file !== '') {
+        $sent = sendVerificationCode($phone_on_file, $code);
+        if ($sent) {
+            $last4 = substr(preg_replace('/\D/', '', $phone_on_file), -4);
+            echo json_encode(['status' => 'success', 'message' => "We texted a reset code to your phone ending in {$last4}."]);
+            exit;
+        }
+    }
+    $html = '<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;padding:20px">'
+          . '<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:16px">Your PlayPBNow reset code is:</p>'
+          . '<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:32px;font-weight:700;letter-spacing:4px">' . $code . '</p>'
+          . '<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#555">It works for 15 minutes. If you did not ask for this, you can ignore this email.</p></div>';
+    if (pbnow_smtp_send($email_user['email'], 'Your PlayPBNow reset code', "Your PlayPBNow reset code is $code. It works for 15 minutes.", $html)) {
+        echo json_encode(['status' => 'success', 'message' => 'We emailed you a reset code.']);
+        exit;
+    }
+    error_log("forgot_password: could not deliver a reset code for user {$email_user['id']} (no phone, email failed)");
+    echo json_encode(['status' => 'error', 'message' => "We couldn't send a code to this account right now. Email mcallpl@gmail.com and we'll get you back in."]);
+    exit;
+
+} elseif ($action === 'request_code') {
     // ── Step 1: Send a 6-digit reset code via SMS ──
     $phone_raw = trim($input['phone'] ?? '');
 
@@ -59,13 +103,17 @@ if ($action === 'request_code') {
     $phone_raw = trim($input['phone'] ?? '');
     $code = trim($input['code'] ?? '');
 
-    if (empty($phone_raw) || empty($code)) {
+    if ((empty($phone_raw) && !$email_user) || empty($code)) {
         echo json_encode(['status' => 'error', 'message' => 'Phone and code are required']);
         exit;
     }
 
-    $phone = cleanPhoneNumber($phone_raw);
-    $user = dbGetRow("SELECT id FROM users WHERE phone = ?", [$phone]);
+    if ($email_user) {
+        $user = ['id' => $email_user['id']];
+    } else {
+        $phone = cleanPhoneNumber($phone_raw);
+        $user = dbGetRow("SELECT id FROM users WHERE phone = ?", [$phone]);
+    }
     if (!$user) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid code']);
         exit;
@@ -89,7 +137,7 @@ if ($action === 'request_code') {
     $code = trim($input['code'] ?? '');
     $new_password = $input['new_password'] ?? '';
 
-    if (empty($phone_raw) || empty($code) || empty($new_password)) {
+    if ((empty($phone_raw) && !$email_user) || empty($code) || empty($new_password)) {
         echo json_encode(['status' => 'error', 'message' => 'All fields are required']);
         exit;
     }
@@ -99,8 +147,12 @@ if ($action === 'request_code') {
         exit;
     }
 
-    $phone = cleanPhoneNumber($phone_raw);
-    $user = dbGetRow("SELECT id FROM users WHERE phone = ?", [$phone]);
+    if ($email_user) {
+        $user = ['id' => $email_user['id']];
+    } else {
+        $phone = cleanPhoneNumber($phone_raw);
+        $user = dbGetRow("SELECT id FROM users WHERE phone = ?", [$phone]);
+    }
     if (!$user) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid request']);
         exit;

@@ -129,7 +129,7 @@ Generate three pieces of content:
 
 1. **subject**: A catchy, concise subject line (under 60 characters) for this broadcast.
 
-2. **sms_text**: A short, engaging SMS message (under 140 characters) that gets players excited and wanting to tap the link for details. Be conversational and action-oriented. Do NOT include any URLs — the system appends the link automatically.
+2. **sms_text**: A short, engaging SMS message (under 140 characters) that gets players excited and wanting to tap the link for details. Be conversational and action-oriented. Do NOT include any URLs; the system appends the link automatically.
 
 3. **body_html**: Rich HTML content for the landing page recipients will see when they tap the link. Make it visually compelling with:
    - A bold headline
@@ -138,10 +138,11 @@ Generate three pieces of content:
    - A clear call-to-action
    - Use inline CSS with this color palette: accent green #87ca37, dark navy #0f1b2d, soft blue-white #e8f0fe
    - Use clean, modern styling (rounded corners, good spacing, readable fonts)
-   - Do NOT include <html>, <head>, <body> tags — just the inner content elements (h2, p, ul, div, etc.)
+   - Do NOT include <html>, <head>, <body> tags, just the inner content elements (h2, p, ul, div, etc.)
    - Make it look professional and exciting
 
 Keep the tone energetic, friendly, and pickleball-focused.
+Write in American English (color, organize, canceled). Never use an em dash or an en dash anywhere: use a comma, a colon, a period or parentheses instead. Do not sign the message.
 PROMPT;
 
         $result = callGemini($prompt, $GEMINI_API_KEY, $GEMINI_MODEL);
@@ -149,11 +150,19 @@ PROMPT;
         if (isset($result['error'])) {
             echo json_encode(['status' => 'error', 'message' => $result['error']]);
         } else {
+            // Instruct AND enforce (Chip, 2026-09-19): the model is told not to
+            // use em dashes, and whatever comes back is cleaned anyway, because
+            // "told" works most of the time and most of the time is how a rule
+            // like this rots.
+            $noDash = function (string $t): string {
+                $t = preg_replace('/\s*[\x{2014}\x{2013}]\s*/u', ', ', $t);
+                return preg_replace('/,\s*,/', ',', $t);
+            };
             echo json_encode([
                 'status' => 'success',
-                'subject' => strip_tags($result['subject'] ?? '', '<strong><em><b><i>'),
-                'sms_text' => strip_tags($result['sms_text'] ?? ''),
-                'body_html' => $result['body_html'] ?? '',
+                'subject' => $noDash(strip_tags($result['subject'] ?? '', '<strong><em><b><i>')),
+                'sms_text' => $noDash(strip_tags($result['sms_text'] ?? '')),
+                'body_html' => $noDash($result['body_html'] ?? ''),
             ]);
         }
         break;

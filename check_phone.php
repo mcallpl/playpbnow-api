@@ -26,7 +26,10 @@ if ($action === 'check') {
 
     echo json_encode([
         'status' => 'success',
-        'has_phone' => !empty($user['phone'])
+        'has_phone' => !empty($user['phone']),
+        // Added 2026-10-31 so Settings can say "ending in 1234". Never the
+        // whole number.
+        'phone_last4' => !empty($user['phone']) ? substr(preg_replace('/\D/', '', $user['phone']), -4) : null,
     ]);
 
 } elseif ($action === 'set') {

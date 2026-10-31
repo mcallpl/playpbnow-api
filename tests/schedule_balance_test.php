@@ -131,11 +131,11 @@ t_assert(pbnow_schedule_games_per_round(5, 9) === 1, "games_per_round(5, 9) == 1
 t_assert(pbnow_schedule_games_per_round(3, 0) === 0, "games_per_round(3, 0) == 0");
 
 // ── mixed-round integrity when courts limit who plays ──
-// Regression for UAT 2026-09-04: the courts stepper let an organiser play fewer
+// Regression for UAT 2026-09-04: the courts stepper let an organizer play fewer
 // games than floor(players/4). The sitter chooser balanced sit COUNTS but
 // ignored gender, so the playing set could be lopsided (e.g. 5 men, 3 women on
 // 2 courts) and buildRound() silently fell back to same-gender teams inside a
-// round labelled "MIXED DOUBLES". 16 players on 2 courts produced 8 such teams.
+// round labeled "MIXED DOUBLES". 16 players on 2 courts produced 8 such teams.
 echo "\nmixed-round integrity with a courts cap\n";
 foreach ([[16, 8, 2], [16, 8, 3], [12, 6, 2], [8, 4, 1]] as [$n, $males, $courts]) {
     $Pm = makeRoster($n, $males);

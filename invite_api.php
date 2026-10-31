@@ -374,7 +374,7 @@ switch ($action) {
         // ── Tell the people who were counting on this match (audit H4) ──
         // Confirmed and wait-listed players have made plans around this slot;
         // a silent cancel leaves them showing up at an empty court. Text them
-        // once (only on the active → cancelled transition, so a second cancel
+        // once (only on the active → canceled transition, so a second cancel
         // click never re-texts). No credit charge: it is part of the original
         // invite, like waitlist promotions. Pending/interested/declined players
         // are not texted — they had not committed.
@@ -391,7 +391,7 @@ switch ($action) {
             if (!empty($affected)) {
                 $shortDate = date('D M j', strtotime($invite['match_date']));
                 $shortTime = date('g:iA', strtotime($invite['match_time']));
-                $cancelMsg = "PlayPBNow: Cancelled: {$shortDate} {$shortTime} @ {$invite['court_name']}. Sorry — the organizer had to call this one off.";
+                $cancelMsg = "PlayPBNow: Canceled: {$shortDate} {$shortTime} @ {$invite['court_name']}. Sorry — the organizer had to call this one off.";
                 try {
                     $cancelClient = new \Twilio\Rest\Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
                 } catch (\Throwable $e) {
@@ -417,14 +417,14 @@ switch ($action) {
                 // Leave a trace in the invite chat so the organizer can see it went out.
                 dbInsert(
                     "INSERT INTO invite_messages (invite_id, player_id, sender_name, message, is_system) VALUES (?, NULL, ?, ?, 1)",
-                    [$invite_id, 'System', "Invite cancelled by organizer. {$notified} player" . ($notified === 1 ? '' : 's') . " notified by text."]
+                    [$invite_id, 'System', "Invite canceled by organizer. {$notified} player" . ($notified === 1 ? '' : 's') . " notified by text."]
                 );
             }
         }
 
         echo json_encode([
             'status' => 'success',
-            'message' => 'Invite cancelled',
+            'message' => 'Invite canceled',
             'notified_count' => $notified,
             'notified_names' => $notifiedNames,
         ]);

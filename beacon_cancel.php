@@ -53,7 +53,7 @@ $stmt->bind_param('i', $beacon_id);
 $stmt->execute();
 $stmt->close();
 
-// C3: cascade — an open lobby on a cancelled beacon used to stay 'gathering'
+// C3: cascade — an open lobby on a canceled beacon used to stay 'gathering'
 // forever while its members kept polling. Close it and expire any open
 // replacement requests so every poller tears down.
 $stmt = $conn->prepare("UPDATE beacon_lobbies SET status = 'cancelled' WHERE beacon_id = ? AND status IN ('gathering', 'locked')");

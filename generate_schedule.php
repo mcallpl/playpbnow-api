@@ -233,10 +233,10 @@ function chooseSitters($ids, $sitCounts, $n, $P) {
  * chooseSitters() balances how often each person sits, which is correct, but it
  * is blind to what the round actually needs. A "mixed" round with G games needs
  * exactly 2*G men and 2*G women on court. Once the courts stepper let an
- * organiser play fewer games than floor(players/4), the sit-count-only choice
+ * organizer play fewer games than floor(players/4), the sit-count-only choice
  * regularly left a lopsided playing set — e.g. 5 men and 3 women for 2 courts —
  * and buildRound() then fell back to same-gender teams. A 16-player group on 2
- * courts produced EIGHT same-gender teams inside rounds labelled
+ * courts produced EIGHT same-gender teams inside rounds labeled
  * "MIXED DOUBLES".
  *
  * This picks the sitters so the players left standing are gender-balanced,

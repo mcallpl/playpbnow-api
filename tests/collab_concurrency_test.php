@@ -266,7 +266,7 @@ if (!$raw) {
         // Even with a last_seen_seq, a database without the columns cannot judge
         // — it must accept, exactly as it did before this work.
         $w = pbnow_collab_apply_score_write($raw, $sid, 0, 0, true, '9', false, '', 0, 'devB', 0);
-        t_assert($w['s1_final'] === '9', 'pre-migration, every write is accepted (no behaviour change)');
+        t_assert($w['s1_final'] === '9', 'pre-migration, every write is accepted (no behavior change)');
 
         $w = pbnow_collab_apply_score_write($raw, $sid, 0, 0, true, '', false, '', null, 'devA', 0);
         t_assert($w['s1_final'] === '', 'CLEAR-A-SCORE still works pre-migration');
@@ -403,7 +403,7 @@ if ($PHASE === 'migrated' && $raw) {
     t_assert($row['s1_str'] === '11' && (int)$row['s1'] === 11, 'the stored row still reads 11');
     t_assert((int)$row['s1_seq'] === 1 && $row['s1_device'] === 'devA', 'seq and author are unchanged by the rejected write');
 
-    // Once B HAS seen seq 1, its correction is honoured — this is a correction,
+    // Once B HAS seen seq 1, its correction is honored — this is a correction,
     // not a stale retry.
     $seqB2 = pbnow_collab_next_seq($raw, $sid);
     $wB2 = pbnow_collab_apply_score_write($raw, $sid, 0, 0, true, '7', false, '', 1, 'devB', $seqB2);

@@ -319,7 +319,7 @@ if ($courtsResult) {
     $courtsResult->free();
 }
 
-// 5. History (expired/cancelled beacons from last 24 hours)
+// 5. History (expired/canceled beacons from last 24 hours)
 $history = [];
 if ($include_history) {
     $histSql = "SELECT b.id, b.user_id, $beaconTypeCol b.court_id, b.player_count, b.skill_level, b.message,

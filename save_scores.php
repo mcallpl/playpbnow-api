@@ -111,7 +111,7 @@ if ($share_code_input) {
 //      an early `exit`, an exception, or a PHP fatal.
 //   2. NEVER block a save. No collab row, an expired one, or a database that
 //      has not had migration 006 applied (so 'finishing' is not a valid enum
-//      member) all fall through to the pre-existing behaviour. Writing a value
+//      member) all fall through to the pre-existing behavior. Writing a value
 //      an ENUM does not contain silently stores '' on MySQL — the historic bug
 //      that collab_alter_mysql8.sql had to repair — so the member is checked
 //      first, never assumed.

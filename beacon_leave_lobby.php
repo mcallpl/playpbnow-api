@@ -8,8 +8,8 @@
 // behind with no way to close it.
 //
 //   member  -> beacon_lobby_members.status = 'left' (+ their open replacement
-//              request, if any, is cancelled)
-//   host    -> lobby cancelled + beacon cancelled + open replacement requests
+//              request, if any, is canceled)
+//   host    -> lobby canceled + beacon canceled + open replacement requests
 //              expired (so every poller tears down via lobby.status)
 //
 // POST JSON: { lobby_id, user_id }

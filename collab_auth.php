@@ -18,7 +18,7 @@
 // ------------------------------------------
 // 1. EVERY new database column it touches is FEATURE-DETECTED. If
 //    migrations/006_collab_hardening.sql has not been applied, every helper
-//    falls back to exactly the behaviour the endpoints had before, so
+//    falls back to exactly the behavior the endpoints had before, so
 //    deploying the PHP ahead of the migration is safe.
 //
 // 2. AUTHENTICATION IS TOLERANT, NOT FAIL-CLOSED. The shipped app build does
@@ -385,7 +385,7 @@ if (!function_exists('pbnow_collab_touch_participant')) {
                 return;
             }
 
-            // ── Legacy path (migration not applied): keep today's behaviour ──
+            // ── Legacy path (migration not applied): keep today's behavior ──
             $existing = dbGetRow(
                 "SELECT id FROM collab_participants WHERE session_id = ? AND user_id = ?"
                 . pbnow_collab_participants_alive_sql() . " ORDER BY id ASC LIMIT 1",

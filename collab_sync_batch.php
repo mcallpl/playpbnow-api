@@ -20,7 +20,7 @@
 // A game object omitting s1_str (or s2_str) leaves that field untouched;
 // sending it as "" CLEARS it — identical to collab_sync_scores.php.
 //
-// collab_sync_scores.php is untouched in behaviour and keeps working for
+// collab_sync_scores.php is untouched in behavior and keeps working for
 // older clients. This is purely an additional, faster path.
 // ============================================================================
 

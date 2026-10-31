@@ -71,7 +71,7 @@ if ($action === 'activate') {
     $stmt2->close();
 
     $conn->close();
-    echo json_encode(['status' => 'success', 'message' => 'Subscription cancelled']);
+    echo json_encode(['status' => 'success', 'message' => 'Subscription canceled']);
 
 } else {
     $conn->close();

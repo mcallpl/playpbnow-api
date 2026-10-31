@@ -164,7 +164,7 @@ if ($session_db_id !== null) {
     $deleted_sessions += $stmt->affected_rows;
     $stmt->close();
 } else {
-    // Legacy: no sessions.id match — fall back to batch_id (original behaviour),
+    // Legacy: no sessions.id match — fall back to batch_id (original behavior),
     // but only for rows the caller owns.
     $stmt = $conn->prepare("DELETE FROM sessions WHERE batch_id = ? AND group_id = ? AND (user_id = ? OR user_id IS NULL OR user_id = '')");
     $uidStr = (string)$auth_uid;

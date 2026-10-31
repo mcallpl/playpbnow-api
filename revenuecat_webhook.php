@@ -15,7 +15,7 @@ header('Content-Type: application/json');
 // RevenueCat secret exists in the vault today and the dashboard sends no
 // Authorization header, so refusing unsigned calls would silently stop every
 // real purchase from activating. Until the secret is in place the call is
-// still honoured and every request is logged loudly.
+// still honored and every request is logged loudly.
 //
 // TO SECURE IT (two steps, either order):
 //   1. Add $vault_revenuecat_webhook_secret = '<random string>'; to

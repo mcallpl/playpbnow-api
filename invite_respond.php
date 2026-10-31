@@ -139,7 +139,7 @@ switch ($action) {
         );
 
         if (!$invite) { echo json_encode(['status' => 'error', 'message' => 'Invite not found']); exit; }
-        if ($invite['status'] === 'cancelled') { echo json_encode(['status' => 'error', 'message' => 'This invite has been cancelled']); exit; }
+        if ($invite['status'] === 'cancelled') { echo json_encode(['status' => 'error', 'message' => 'This invite has been canceled']); exit; }
 
         // Include waitlist count so the response page can show it
         $waitlistCount = dbGetRow(
@@ -202,7 +202,7 @@ switch ($action) {
 
         $invite = dbGetRow("SELECT * FROM match_invites WHERE match_code = ?", [$match_code]);
         if (!$invite) { echo json_encode(['status' => 'error', 'message' => 'Invite not found']); exit; }
-        if ($invite['status'] === 'cancelled') { echo json_encode(['status' => 'error', 'message' => 'This invite has been cancelled']); exit; }
+        if ($invite['status'] === 'cancelled') { echo json_encode(['status' => 'error', 'message' => 'This invite has been canceled']); exit; }
 
         // ── Expired invites stay closed (audit M5) ──
         if (pbnow_invite_is_past($invite)) {

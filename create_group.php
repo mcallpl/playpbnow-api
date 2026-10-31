@@ -15,7 +15,7 @@ $user_id  = $input['user_id'] ?? '';
 $court_id = isset($input['court_id']) ? (int)$input['court_id'] : null;
 
 // WRITE endpoint: a session token, when present, is the identity; the body
-// user_id is only honoured for older clients that send no token.
+// user_id is only honored for older clients that send no token.
 $session_uid = pbnow_optional_user_id();
 if ($session_uid !== null) {
     $user_id = $session_uid;

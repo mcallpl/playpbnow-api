@@ -4,7 +4,7 @@
  *
  * The 30-day trial used to start the moment someone registered, burning down on
  * calendar time whether or not they ever opened the app. Someone who signed up,
- * got busy, and organised their first game three weeks later arrived with a week
+ * got busy, and organized their first game three weeks later arrived with a week
  * of trial left — and anyone who never got round to it had the whole trial
  * expire without ever seeing what they were being sold.
  *

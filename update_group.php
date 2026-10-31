@@ -58,7 +58,7 @@ try {
         exit;
     }
 
-    // Update group name (original behaviour)
+    // Update group name (original behavior)
     if ($new_name !== '') {
         dbQuery(
             "UPDATE `groups` SET name = ?, updated_at = NOW() WHERE group_key = ? AND owner_user_id = ?",

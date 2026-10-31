@@ -367,7 +367,7 @@ switch ($action) {
         }
 
         dbQuery("UPDATE match_invites SET status = 'cancelled' WHERE id = ?", [$invite_id]);
-        echo json_encode(['status' => 'success', 'message' => 'Invite cancelled']);
+        echo json_encode(['status' => 'success', 'message' => 'Invite canceled']);
         break;
 
     // ===== USER ENGAGEMENT STATS =====

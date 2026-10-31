@@ -536,7 +536,24 @@ function pbnow_build_schedule(array $P, array $round_configs, int $courts = 0): 
     $capUsed = null;
 
     $maxCap = max(2, $rounds);
+    // Fewest repeats (2026-10-31): once a repeat partner is unavoidable, the
+    // first schedule that fit was taken, and 6 men + 6 women over 7 rounds
+    // came out with 24 to 32 orange (repeat) teams where 12 would do. At a cap
+    // above 1, every successful run is kept as a candidate and the one with
+    // the fewest repeat team slots wins. A cap of 1 has no repeats at all, so
+    // its first success is already the best.
+    $repeatSlots = function (array $sched): int {
+        $pc = [];
+        foreach ($sched as $rd) foreach ($rd['games'] as $g) foreach (['team1', 'team2'] as $tk) {
+            $k = pk($g[$tk][0]['id'], $g[$tk][1]['id']);
+            $pc[$k] = ($pc[$k] ?? 0) + 1;
+        }
+        $o = 0;
+        foreach ($pc as $c) if ($c > 1) $o += $c;
+        return $o;
+    };
     for ($maxAllowed = 1; $maxAllowed <= $maxCap; $maxAllowed++) {
+        $bestScore = null;
         for ($run = 0; $run < 50; $run++) {
             $pairCounts  = [];
             $sitCount    = array_fill_keys($all_ids, 0);
@@ -626,8 +643,14 @@ function pbnow_build_schedule(array $P, array $round_configs, int $courts = 0): 
                 $schedule[] = ['games'=>$gamesOut, 'byes'=>$byes, 'type'=>$mode];
             }
 
-            if (!$failed) { $best = $schedule; $capUsed = $maxAllowed; break 2; }
+            if (!$failed) {
+                if ($maxAllowed === 1) { $best = $schedule; $capUsed = 1; break 2; }
+                $score = $repeatSlots($schedule);
+                if ($bestScore === null || $score < $bestScore) { $best = $schedule; $bestScore = $score; $capUsed = $maxAllowed; }
+                if ($score === 0) break;
+            }
         }
+        if ($best !== null) break;
     }
 
     if ($best === null || empty($best)) {

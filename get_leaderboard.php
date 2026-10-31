@@ -194,7 +194,7 @@ foreach ($stats as $statKey => $s) {
     
     // BADGE LOGIC (mutually exclusive, except turkey combines with any):
     // 💠 Platinum = won ALL games (100%) — blue diamond emoji for platinum
-    // 💎 Diamond = lost exactly 1 game
+    // 💎 Diamond = lost exactly 1 game, with more wins than losses
     // 🔥 Fire = won 3+ games
     // 🦃 Turkey = got scored 0 in any game (COMBINABLE with any above)
     //
@@ -204,8 +204,10 @@ foreach ($stats as $statKey => $s) {
     if ($total > 0) {
         if ($s['w'] === $total) {
             $badges[] = '💠'; // Platinum - perfect record (blue diamond)
-        } elseif ($s['l'] === 1) {
-            $badges[] = '💎'; // Diamond - lost exactly one
+        } elseif ($s['l'] === 1 && $s['w'] > $s['l']) {
+            // Diamond - lost exactly one, and won more than lost (2026-10-31:
+            // 0 wins and 1 loss earned the Diamond, which says "nearly perfect")
+            $badges[] = '💎';
         } elseif ($s['w'] >= 3) {
             $badges[] = '🔥'; // Fire - 3+ wins
         }

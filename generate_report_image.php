@@ -151,9 +151,17 @@ drawCenteredText($im, $font_bold, 16, $x_cur, $y_cur, $x_cur+$col_round_width, $
 $x_cur += $col_round_width;
 
 // COURTS
+// Court names for this match (2026-10-31): the app stamps `court_labels` on
+// every round. A blank or missing name keeps the court's number, as before.
+$court_labels = [];
+foreach ($schedule as $round) {
+    if (isset($round['court_labels']) && is_array($round['court_labels'])) { $court_labels = $round['court_labels']; break; }
+}
 for ($i=0; $i<$max_courts; $i++) {
     $x_next = $x_cur + $col_court_width;
-    drawCenteredText($im, $font_bold, 18, $x_cur, $y_cur, $x_next, $y_cur+$table_header_height, $white, "COURT " . ($i + 1));
+    $label = isset($court_labels[$i]) ? trim(mb_substr((string)$court_labels[$i], 0, 8)) : '';
+    if ($label === '') $label = (string)($i + 1);
+    drawCenteredText($im, $font_bold, 18, $x_cur, $y_cur, $x_next, $y_cur+$table_header_height, $white, "COURT " . $label);
     $x_cur = $x_next;
 }
 
